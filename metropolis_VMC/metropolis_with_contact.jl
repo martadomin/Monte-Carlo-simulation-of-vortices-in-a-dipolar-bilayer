@@ -1,4 +1,4 @@
-using Random, LinearAlgebra, Dierckx, StatsBase, Plots, Base.Threads, LaTeXStrings, ProgressMeter, Roots
+using Random, LinearAlgebra, Dierckx, StatsBase, Plots, Base.Threads, LaTeXStrings, ProgressMeter, Roots, Bessels
 
 # ------------------------------------------
 # Utility Functions
@@ -73,24 +73,11 @@ end
 # Creating the Wavefunction
 # ------------------------------------------
 
-"""
-    interpolated_wave_function(psi::Matrix{Float64}, x::Vector{Float64}) -> Spline2D
-
-Interpolates a two-body wave function matrix `psi` onto a finer 2D grid using bicubic splines.
-
-# Input:
-- `psi::Matrix{Float64}`: 2D matrix of wave function values, defined on a grid of points.
-- `x::Vector{Float64}`: Grid points corresponding to both axes of `psi`.
-
-# Output:
-- `Spline2D`: A bicubic spline object for smooth evaluation at arbitrary (x1, x2).
-
-# Usage:
-Constructs a continuous representation of the numerically obtained two-body wave function,
-which can be efficiently evaluated during Monte Carlo sampling.
-"""
-function interpolated_wave_function(psi::Matrix{Float64}, x::Vector{Float64})::Spline2D
-    return Spline2D(x, x, psi; kx=4, ky=4, s=0)
+function calculation_of_constants(L::Float64, R_match::Float64)
+    C3 = besselk(1, 2/sqrt(R_match))/besselk(0, 2/sqrt(R_match)) * R_match^(-3/2) * (R_match^(-2) - (L-R_match)^(-2))^(-1)
+    C2 = exp(4*C3/L)
+    C1 = (C2 * exp(-C3/R_match) * exp(-C3/(L-R_match)))/besselk(0, 2/sqrt(R_match))
+    return C1, C2, C3
 end
 
 """
@@ -120,33 +107,25 @@ Loops over all unique pairs (i < j) and multiplies together the selected two-bod
 The long-range term uses the interpolated two-body wave function.
 """
 function trial_wave_function(
-    x_coord::Vector{Float64}, num_part::Int, psi_interp,
-    L::Float64, k_L::Float64, k_contact::Float64, α::Float64,
-    long_range::Bool, fermi_stats::Bool, reatto_chester::Bool, contact::Bool
-)::Float64
+    x_coord::Vector{Float64}, y_coord::Vector{Float64}, num_part::Int,
+    L::Float64, R_match::Float64, Constants::Tuple{Float64, Float64, Float64})::Float64
     Psi_tot = 1.0
+
+    C1 = Constants[1]
+    C2 = Constants[2]
+    C3 = Constants[3]
+
     @inbounds for i in 1:num_part
         @inbounds for j in (i + 1):num_part
-            if fermi_stats
-                # Fermi statistics: node at coincident positions, exponent α
-                Psi_tot *= (sin((π/L) * (x_coord[i] - x_coord[j])))^α
+            dx = get_periodic_difference(x_coord[i], x_coord[j], L)
+            dy = get_periodic_difference(y_coord[i], y_coord[j], L)
+            r = sqrt(dx^2 + dy^2)
+            if r < R_match
+                Psi_tot *= C1 * besselk(0, 2/sqrt(r))
+            else
+                Psi_tot *= C2 * exp(-C3/r) * exp(-C3/(L-r))
             end
-            if reatto_chester
-                # Jastrow-like (Reatto-Chester) factor
-                Psi_tot *= abs(sin((π/L) * (x_coord[i] - x_coord[j])))^k_L
-            end
-            if contact
-                # Bethe-Peierls contact interaction
-                dist_mod = abs(get_periodic_difference(x_coord[i], x_coord[j], L)) - L/2
-                Psi_tot *= cos(k_contact * dist_mod)
-            end
-            if long_range
-                # Cavity-mediated long-range interaction, interpolated on unit cell
-                x_coord_per_1 = map_to_unit_cell(x_coord[i])
-                x_coord_per_2 = map_to_unit_cell(x_coord[j])
-                Psi_tot *= evaluate(psi_interp, x_coord_per_1, x_coord_per_2)
-            end
-        end
+        end 
     end
     return Psi_tot
 end
