@@ -103,14 +103,14 @@ Calculates the total interaction energy for a set of particles, each pair intera
 # Notes
 The interaction is given by (|r_i - r_j|^(-3)) for each pair (i < j).
 """
-function local_interaction_energy(positions::Matrix{Float64}, L::Float64)::Float64
+function local_interaction_energy(x_coord::Vector{Float64}, y_coord::Vector{Float64}, L::Float64)::Float64
     E_int = 0.0
-    num_part = size(positions, 2)
+    num_part = length(x_coord)
 
-    @inbounds for i in 1:num_part-1
+    @inbounds for i in 1:num_part
         @inbounds for j in (i + 1):num_part
-            dx = get_periodic_difference(positions[1, i], positions[1, j], L)
-            dy = get_periodic_difference(positions[2, i], positions[2, j], L)
+            dx = get_periodic_difference(x_coord[i], x_coord[j], L)
+            dy = get_periodic_difference(y_coord[i], y_coord[j], L)
             E_int += (dx^2 + dy^2)^(-3/2)
         end
     end
@@ -118,13 +118,14 @@ function local_interaction_energy(positions::Matrix{Float64}, L::Float64)::Float
 end
 
 """
-    local_kinetic_energy(positions, L, R_match, Constants) -> Float64
+    local_kinetic_energy(xcoord, ycoord, L, R_match, Constants) -> Float64
 
 Evaluates the local kinetic energy of the 2D dipolar Bose gas using the
 logarithmic-derivative form of the Jastrow wavefunction.
 
 # Input:
-- `positions::Matrix{Float64}`: 2×N matrix of particle positions.
+- `xcoord::Vector{Float64}`: x-coordinates of all particles.
+- `ycoord::Vector{Float64}`: y-coordinates of all particles.
 - `L::Float64`: Box length (periodic boundary conditions assumed).
 - `R_match::Float64`: Matching distance between short- and long-range regimes of the Jastrow factor.
 - `Constants::Tuple{Float64, Float64, Float64}`: Tuple (C1, C2, C3) of Jastrow constants.
@@ -132,10 +133,10 @@ logarithmic-derivative form of the Jastrow wavefunction.
 # Output:
 - `Float64`: Local kinetic energy in dimensionless units.
 """
-function local_kinetic_energy(positions::Matrix{Float64}, L::Float64, R_match::Float64, 
+function local_kinetic_energy(xcoord::Vector{Float64}, ycoord::Vector{Float64}, L::Float64, R_match::Float64, 
                                 Constants::Tuple{Float64, Float64, Float64})::Float64
     
-    num_part = size(positions, 2)
+    num_part = length(xcoord)
     E_kin = 0.0
 
     @inbounds for k in 1:num_part
@@ -144,8 +145,8 @@ function local_kinetic_energy(positions::Matrix{Float64}, L::Float64, R_match::F
         scalar_term = 0.0
         for i in 1:num_part
             if i != k
-                dx = get_periodic_difference(positions[1, i], positions[1, k], L)
-                dy = get_periodic_difference(positions[2, i], positions[2, k], L)
+                dx = get_periodic_difference(xcoord[i], xcoord[k], L)
+                dy = get_periodic_difference(ycoord[i], ycoord[k], L)
                 r = sqrt(dx^2 + dy^2)
                 du_dr = u2_first_derivative(r, R_match, L, Constants)
                 d2u_dr2 = u2_second_derivative(r, R_match, L, Constants)
@@ -160,9 +161,9 @@ function local_kinetic_energy(positions::Matrix{Float64}, L::Float64, R_match::F
     return -0.5 * E_kin
 end
 
-function local_energy(positions::Matrix{Float64}, L::Float64, R_match::Float64,Constants::Tuple{Float64, Float64, Float64})::Tuple{Float64, Float64, Float64}
-    E_kin = local_kinetic_energy(positions, L, R_match, Constants)
-    E_int = local_interaction_energy(positions, L)
+function local_energy(xcoord::Vector{Float64}, ycoord::Vector{Float64}, L::Float64, R_match::Float64, Constants::Tuple{Float64, Float64, Float64})::Tuple{Float64, Float64, Float64}
+    E_kin = local_kinetic_energy(xcoord, ycoord, L, R_match, Constants)
+    E_int = local_interaction_energy(xcoord, ycoord, L)
     return E_kin + E_int, E_kin, E_int
 end
 
@@ -170,119 +171,43 @@ end
 # Creating the Wavefunction
 # ------------------------------------------
 
-# """
-#     trial_wave_function(x_coord, num_part, psi_interp, L, k_L, k_contact, α, long_range, fermi_stats, reatto_chester, contact) -> Float64
+function compute_logΨ(xcoord::Vector{Float64}, ycoord::Vector{Float64}, R_match::Float64, L::Float64, Constants::Tuple{Float64, Float64, Float64})::Float64
+    logΨ = 0.0
+    num_part = length(xcoord)
 
-# Evaluates the total trial wave function for a set of particle positions, possibly including 
-# Fermi statistics, Reatto-Chester (Jastrow) correlations, contact interaction, and/or long-range cavity-mediated interaction.
+    @inbounds for i in 1:num_part
+        @inbounds for j in (i + 1):num_part
+            dx = get_periodic_difference(xcoord[i], xcoord[j], L)
+            dy = get_periodic_difference(ycoord[i], ycoord[j], L)
+            r = sqrt(dx^2 + dy^2)
+            logΨ += u2(r, R_match, L, Constants)
+        end
+    end
+    return logΨ
+end
 
-# # Input:
-# - `x_coord::Vector{Float64}`: Vector of particle positions.
-# - `num_part::Int`: Number of particles.
-# - `psi_interp`: Interpolated two-body wave function (e.g. Spline2D object).
-# - `L::Float64`: Box length (system size).
-# - `k_L::Float64`: Reatto-Chester parameter (Jastrow exponent).
-# - `k_contact::Float64`: Parameter for the contact (Bethe-Peierls) term.
-# - `α::Float64`: Exponent for Fermi statistics factor.
-# - `long_range::Bool`: Whether to include long-range (cavity-mediated) term.
-# - `fermi_stats::Bool`: Whether to include Fermi statistics factor.
-# - `reatto_chester::Bool`: Whether to include Reatto-Chester factor.
-# - `contact::Bool`: Whether to include contact interaction factor.
+#Only valid when moving one particle for each step:
+function compute_ΔlogΨ(x_old::Vector{Float64}, y_old::Vector{Float64}, x_new::Vector{Float64}, y_new::Vector{Float64}, R_match::Float64, L::Float64, Constants::Tuple{Float64, Float64, Float64}, id::Int)::Float64
+    ΔlogΨ = 0.0
+    num_part = length(x_old)
 
-# # Output:
-# - `Float64`: Value of the total trial wave function for the given configuration.
-
-# # Notes
-# Loops over all unique pairs (i < j) and multiplies together the selected two-body terms.
-# The long-range term uses the interpolated two-body wave function.
-# """
-# function trial_wave_function(
-#     x_coord::Vector{Float64}, y_coord::Vector{Float64}, num_part::Int,
-#     L::Float64, R_match::Float64, Constants::Tuple{Float64, Float64, Float64})::Float64
-#     Psi_tot = 1.0
-
-#     C1 = Constants[1]
-#     C2 = Constants[2]
-#     C3 = Constants[3]
-
-#     @inbounds for i in 1:num_part
-#         @inbounds for j in (i + 1):num_part
-#             dx = get_periodic_difference(x_coord[i], x_coord[j], L)
-#             dy = get_periodic_difference(y_coord[i], y_coord[j], L)
-#             r = sqrt(dx^2 + dy^2)
+    @inbounds for i in 1:num_part
+        if i != id
+            #old distance
+            dx_old = get_periodic_difference(x_old[i], x_old[id], L)
+            dy_old = get_periodic_difference(y_old[i], y_old[id], L)
+            r_old = sqrt(dx_old^2 + dy_old^2)
+            #new distance
+            dx_new = get_periodic_difference(x_new[i], x_new[id], L)
+            dy_new = get_periodic_difference(y_new[i], y_new[id], L)
+            r_new = sqrt(dx_new^2 + dy_new^2)
             
-#             if r < 1e-10
-#                 return 0.0
-#             end
-
-#             if r < R_match
-#                 Psi_tot *= C1 * besselk(0, 2/sqrt(r))
-#             else
-#                 Psi_tot *= C2 * exp(-C3/r) * exp(-C3/(L-r))
-#             end
-#         end 
-#     end
-#     return Psi_tot
-# end
-
-# """
-#     update_wave_function_after_move(x_coord, x_new, num_part, psi_interp, L, k_L, k_contact, α, long_range, fermi_stats, reatto_chester, contact) -> Float64
-
-# Computes the ratio Ψ_new/Ψ_old of trial wave functions for a move, 
-# efficiently updating only the necessary pair terms.
-
-# # Input:
-# - `x_coord::Vector{Float64}`: Old configuration (positions).
-# - `x_new::Vector{Float64}`: New configuration (positions; typically only one coordinate differs).
-# - `num_part::Int`: Number of particles.
-# - `psi_interp`: Interpolated two-body wave function (Spline2D).
-# - `L::Float64`, `k_L::Float64`, `k_contact::Float64`, `α::Float64`: Same as in `trial_wave_function`.
-# - `long_range::Bool`, `fermi_stats::Bool`, `reatto_chester::Bool`, `contact::Bool`: Term selection.
-
-# # Output:
-# - `Float64`: The ratio Ψ_new / Ψ_old for the proposed move.
-
-# # Notes
-# Loops only over pairs involving the moved particle(s) for efficiency.
-# """
-# function update_wave_function_after_move(
-#     x_coord::Vector{Float64}, x_new::Vector{Float64}, num_part::Int,
-#     psi_interp, L::Float64, k_L::Float64, k_contact::Float64, α::Float64,
-#     long_range::Bool, fermi_stats::Bool, reatto_chester::Bool, contact::Bool
-# )::Float64
-#     psi_ratio = 1.0
-#     @inbounds for i in 1:num_part
-#         if x_coord[i] != x_new[i]
-#             @inbounds for j in 1:num_part
-#                 if i != j
-#                     if fermi_stats
-#                         # Fermi statistics: node at coincident positions, exponent α
-#                         psi_ratio *= (sin((π/L) * (x_new[i] - x_new[j])) / sin((π/L) * (x_coord[i] - x_coord[j])))^α
-#                     end
-#                     if reatto_chester
-#                         # Jastrow-like (Reatto-Chester) factor
-#                         psi_ratio *= abs(sin((π/L) * (x_new[i] - x_new[j])))^k_L / abs(sin((π/L) * (x_coord[i] - x_coord[j])))^k_L
-#                     end
-#                     if contact
-#                         # Bethe-Peierls contact interaction
-#                         dist_mod_new = abs(get_periodic_difference(x_new[i], x_new[j], L)) - L/2
-#                         dist_mod_old = abs(get_periodic_difference(x_coord[i], x_coord[j], L)) - L/2
-#                         psi_ratio *= cos(k_contact * dist_mod_new) / cos(k_contact * dist_mod_old)
-#                     end
-#                     if long_range
-#                         # Cavity-mediated long-range interaction, interpolated on unit cell
-#                         x_new_per_1 = map_to_unit_cell(x_new[i])
-#                         x_new_per_2 = map_to_unit_cell(x_new[j])
-#                         x_coord_per_1 = map_to_unit_cell(x_coord[i])
-#                         x_coord_per_2 = map_to_unit_cell(x_coord[j])
-#                         psi_ratio *= evaluate(psi_interp, x_new_per_1, x_new_per_2) / evaluate(psi_interp, x_coord_per_1, x_coord_per_2)
-#                     end
-#                 end
-#             end
-#         end
-#     end
-#     return psi_ratio
-# end
+            ΔlogΨ += u2(r_new, R_match, L, Constants) - 
+                        u2(r_old, R_match, L, Constants)
+        end
+    end
+    return ΔlogΨ
+end
 
 # ------------------------------------------
 # System Initialization and Particle Moves
@@ -303,8 +228,9 @@ Generates a random initial configuration of `num_part` particles uniformly distr
 # Notes
 Particle positions are initialized randomly and independently with uniform probability over the full simulation box.
 """
-function random_initial_config(num_part::Int, L::Float64)::Matrix{Float64}
-    return L .* rand(2, num_part) .- L/2  # Random initial configuration in the range [-L/2, L/2]
+function random_initial_config(num_part::Int, L::Float64)::Tuple{Vector{Float64}, Vector{Float64}}
+    positions = L .* rand(2, num_part) .- L/2  # Random initial configuration in the range [-L/2, L/2]
+    return positions[1, :], positions[2, :]  # Return x and y coordinates as separate vectors
 end
 
 """
@@ -327,10 +253,10 @@ Proposes a random move for a single particle by displacing it within [-delta, de
 # Notes
 A particle is selected at random and displaced by a random amount in [-delta, delta]. The new position is wrapped to the periodic box using the minimum image convention.
 """
-function move_one_part(x_coord::Vector{Float64}, y_coord::Vector{Float64}, num_part::Int, delta::Float64, L::Float64)::Tuple{Int, Vector{Float64}, Vector{Float64}}
+function move_one_part(x_coord::Vector{Float64}, y_coord::Vector{Float64}, delta::Float64, L::Float64)::Tuple{Int, Vector{Float64}, Vector{Float64}}
     x_coord_new = copy(x_coord)
     y_coord_new = copy(y_coord)
-    id = rand(1:num_part)
+    id = rand(1:length(x_coord))
     x_coord_new[id] += rand() * (2 * delta) - delta  # Displacement in [-delta, delta]
     x_coord_new[id] = get_periodic_difference(x_coord_new[id], 0.0, L)  # Apply periodic boundary conditions
     y_coord_new[id] += rand() * (2 * delta) - delta  # Displacement in [-delta, delta]
@@ -354,16 +280,6 @@ Runs a full Metropolis Monte Carlo simulation for a 1D quantum system with custo
 - `num_bins::Int`: Number of bins for histograms (density, pair).
 - `delta::Float64`: Maximum displacement for particle moves.
 - `L::Float64`: Length of the periodic simulation box.
-- `V0::Float64`: Strength of the cavity-mediated potential.
-- `k_lat::Float64`: Lattice/cavity wavevector.
-- `psi_interp`: Interpolated two-body wavefunction (e.g. Spline2D).
-- `k_L::Float64`: Reatto-Chester (Jastrow) exponent.
-- `k_contact::Float64`: Bethe-Peierls contact parameter.
-- `α::Float64`: Exponent for Fermi statistics.
-- `long_range::Bool`: Enable/disable long-range (cavity) term.
-- `fermi_stats::Bool`: Enable/disable Fermi statistics term.
-- `reatto_chester::Bool`: Enable/disable Jastrow/RC term.
-- `contact::Bool`: Enable/disable contact term.
 
 # Output:
 - `Float64`: Mean total energy per configuration (E_tot / n_uncorr).
@@ -387,101 +303,144 @@ Call this function to simulate the equilibrium properties of the system, and to 
 ```julia
 E, E2, SSF, n_x, g2_xx, acc_ratio, E_trace = metropolis(8, 10^6, 100, 0.05, 1.0, 1.0, 2π, psi_interp, 2.0, 1.0, 1.0, true, true, false, false)
 """
-function metropolis(num_part::Int, num_steps::Int, num_bins::Int, delta::Float64, L::Float64, V0::Float64, k_lat::Float64, psi_interp, k_L::Float64, k_contact::Float64, α::Float64, long_range::Bool, fermi_stats::Bool, reatto_chester::Bool, contact::Bool)::Tuple{Float64, Float64, Vector{ComplexF64}, Vector{Float64}, Matrix{Float64}, Float64, Vector{Float64}, Vector{Vector{Float64}}}
+function metropolis(num_part::Int, num_steps::Int, num_bins::Int, delta::Float64, L::Float64, R_match::Float64, Constants::Tuple{Float64, Float64, Float64}; live_plot::Bool=false, plot_every::Int=100)
     acceptance_ratio = 0.0
     n_uncorr = 0
-    bins = range(-L/2, stop=L/2, length=num_bins+1)
-    hist_1d = zeros(Float64, num_bins)
-    hist_2d = zeros(Float64, num_bins, num_bins)
-    dx = L / num_bins
-    step_block = num_steps ÷ num_steps
+    # bins = range(-L/2, stop=L/2, length=num_bins+1)
+    # hist_1d = zeros(Float64, num_bins)
+    # hist_2d = zeros(Float64, num_bins, num_bins)
+    # dx = L / num_bins
+    step_block = 1
     E_tot = 0.0
     E_sq = 0.0
-    E_local_values = Vector{Float64}(undef, (num_steps÷step_block))
-    iter_val = Vector{Float64}(undef, (num_steps÷step_block))
-    idx_plot = 1
-    configurations = Vector{Vector{Float64}}(undef, num_steps ÷ step_block)
+    energy_trace = Float64[]
+    step_trace = Int[]
+    # E_local_values = Vector{Float64}(undef, (num_steps÷step_block))
+    # iter_val = Vector{Float64}(undef, (num_steps÷step_block))
+    # idx_plot = 1
+    # configurations = Vector{Vector{Float64}}(undef, num_steps ÷ step_block)
 
-    final_point = 5*L
-    k = (2*π/L) * collect(1:1:final_point)
-    SSF = zeros(ComplexF64, length(k))
+    # final_point = 5*L
+    # k = (2*π/L) * collect(1:1:final_point)
+    # SSF = zeros(ComplexF64, length(k))
 
-    plt = plot(title=L"Evolution of Local Energy", xlabel=L"Step", ylabel=L"Local Energy", legend=false)
-
-    x_coord = random_initial_config(num_part, L)
-    psi_old_val = trial_wave_function(x_coord, num_part, psi_interp, L, k_L, k_contact, α, long_range, fermi_stats, reatto_chester, contact)
-
+    x_coord, y_coord = random_initial_config(num_part, L)
+    
     progress = Progress(num_steps; desc="Running Metropolis $num_part...", showspeed=true)
     for i in 1:num_steps
         next!(progress)  # Update progress bar
-        x_new, moved_idx = move_one_part(x_coord, num_part, delta, L)
 
-        x_new_mapped = copy(x_new)
-        x_new_mapped[moved_idx] = map_to_unit_cell(x_new[moved_idx])
+        moved_id, x_new, y_new = move_one_part(x_coord, y_coord, delta, L)
 
-        if x_new_mapped[moved_idx] == 0.5 || x_new_mapped[moved_idx] == -0.5
-            println(x_new_mapped[moved_idx])
-        end
+        ΔlogΨ = compute_ΔlogΨ(x_coord, y_coord, x_new, y_new, R_match, L, Constants, moved_id)
 
-        psi_ratio = update_wave_function_after_move(x_coord, x_new, num_part, psi_interp, L, k_L, k_contact, α, long_range, fermi_stats, reatto_chester, contact)
-        psi_new_val = psi_old_val * psi_ratio
-    
-        ϵ = 1e-300  # tiny epsilon to prevent log(0)
-        logψ_old = log(abs(psi_old_val) + ϵ)
-        logψ_new = log(abs(psi_new_val) + ϵ)
-
-        logw = 2 * (logψ_new - logψ_old)
-
-        if log(rand()) < logw
+        if log(rand()) < 2 * ΔlogΨ
             x_coord = x_new
-            psi_old_val = psi_new_val
+            y_coord = y_new
             acceptance_ratio += 1
         end
     
-        for x in x_coord
-            bin_idx = min(num_bins, max(1, Int(floor((x + L/2) / L * num_bins)) + 1))
-            hist_1d[bin_idx] += 1
-        end
+        # for x in x_coord
+        #     bin_idx = min(num_bins, max(1, Int(floor((x + L/2) / L * num_bins)) + 1))
+        #     hist_1d[bin_idx] += 1
+        # end
     
-        for i in 1:num_part
-            for j in (i + 1):num_part
-                bin_x = min(num_bins, max(1, Int(floor((x_coord[i] + L/2) / L * num_bins)) + 1))
-                bin_y = min(num_bins, max(1, Int(floor((x_coord[j] + L/2) / L * num_bins)) + 1))
+        # for i in 1:num_part
+        #     for j in (i + 1):num_part
+        #         bin_x = min(num_bins, max(1, Int(floor((x_coord[i] + L/2) / L * num_bins)) + 1))
+        #         bin_y = min(num_bins, max(1, Int(floor((x_coord[j] + L/2) / L * num_bins)) + 1))
 
-                hist_2d[bin_x, bin_y] += 1
-            end
-        end
+        #         hist_2d[bin_x, bin_y] += 1
+        #     end
+        # end
     
         if i % step_block == 0
 
-            E_local, E_kinetic, E_potential = local_energy_log(x_coord, num_part, psi_interp, V0, k_lat, L, k_L, k_contact, α, long_range, fermi_stats, reatto_chester, contact)
-            # E_local, E_kinetic, E_potential = local_energy(x_coord, num_part, psi_interp, V0, k_lat, L, k_L, k_contact, fermi_stats, reatto_chester, contact)
-            E_tot += E_local
-            E_sq += E_local^2
-            n_uncorr += 1
-
+            E_local, E_kinetic, E_potential = local_energy(x_coord, y_coord, L, R_match, Constants)
+            
             if isnan(E_local)
                 @warn "NaN detected at step $i: E_local = $E_local"
                 continue  # Skip this iteration to avoid polluting data
             end
 
-            for a in 1:num_part, b in 1:num_part
-                SSF .+= exp.(im * (x_coord[a] - x_coord[b]) .* k)
+            E_tot += E_local
+            E_sq += E_local^2
+            n_uncorr += 1
+            if i % plot_every == 0
+                push!(step_trace, i)
+                push!(energy_trace, E_local / num_part)
+
             end
+            
+            # for a in 1:num_part, b in 1:num_part
+            #     SSF .+= exp.(im * (x_coord[a] - x_coord[b]) .* k)
+            # end
     
-            iter_val[idx_plot] = i
-            E_local_values[idx_plot] = E_local / num_part
-            configurations[idx_plot] = copy(x_coord)
-            idx_plot += 1
+            # iter_val[idx_plot] = i
+            # E_local_values[idx_plot] = E_local / num_part
+            # configurations[idx_plot] = copy(x_coord)
+            # idx_plot += 1
         end
     end
 
-    hist_1d ./= (sum(hist_1d) * dx)
-    hist_2d ./= (sum(hist_2d) * dx^2)
-    SSF ./= n_uncorr
+    if live_plot==true
+        energy_plot = plot(
+        step_trace,
+        energy_trace,
+        xlabel="Step",
+        ylabel="Local energy per particle",
+        title="Energy evolution",
+        legend=false,
+        lw=2,
+        )
+        display(energy_plot)
+        readline()
+    end
 
-    plot!(plt, iter_val, E_local_values, label=L"E", color=:blue)
-    display(plt)
+    println("Acceptance ratio: ", acceptance_ratio / num_steps)
+    # hist_1d ./= (sum(hist_1d) * dx)
+    # hist_2d ./= (sum(hist_2d) * dx^2)
+    # SSF ./= n_uncorr
 
-    return E_tot / n_uncorr, E_sq / n_uncorr, SSF, hist_1d, hist_2d, acceptance_ratio / num_steps, E_local_values, configurations
+    return E_tot / n_uncorr, E_sq / n_uncorr, acceptance_ratio / num_steps
 end
+
+
+#System parameters
+n = 32
+num_part = 5
+L = sqrt(num_part/n)
+
+println("Density n = ", n)
+println("Number of particles: ", num_part)
+println("L = ", L)
+
+#Simulation parameters
+R_match_vals = LinRange(0.01, L, 100) # Matching radius to validate continuity of f2
+
+results_path = joinpath(@__DIR__, "R_match_energy_results.txt")
+R_match_vals_vec = collect(R_match_vals)
+energy_means = Vector{Float64}(undef, length(R_match_vals_vec))
+energy_sq_means = Vector{Float64}(undef, length(R_match_vals_vec))
+acceptance_ratio_vec = Vector{Float64}(undef, length(R_match_vals_vec))
+
+@threads for idx in eachindex(R_match_vals_vec)
+    R_match = R_match_vals_vec[idx]
+    num_steps = 10^6
+    num_bins = 100
+    delta = 0.1
+    Constants = calculate_constants(L, R_match)
+    E_mean, E_sq_mean, acceptance_ratio = metropolis(num_part, num_steps, num_bins, delta, L, R_match, Constants; live_plot=false, plot_every=10^3)
+    energy_means[idx] = E_mean
+    energy_sq_means[idx] = E_sq_mean
+    acceptance_ratio_vec[idx] = acceptance_ratio
+end
+
+open(results_path, "w") do io
+    println(io, "R_match\tMeanEnergyPerParticle\tMeanSquaredEnergy\tAcceptanceRatio")
+    for idx in eachindex(R_match_vals_vec)
+        println(io, "$(R_match_vals_vec[idx])\t$(energy_means[idx])\t$(energy_sq_means[idx])\t$(acceptance_ratio_vec[idx])")
+    end
+end
+
+println("Saved sweep results to: ", results_path)
