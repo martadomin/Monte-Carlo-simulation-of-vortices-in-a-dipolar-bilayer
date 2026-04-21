@@ -1,6 +1,32 @@
 using Random, LinearAlgebra, Dierckx, StatsBase, Plots, Base.Threads, LaTeXStrings, ProgressMeter, Roots, Bessels
 
-function calculation_of_constants(L::Float64, R_match::Float64)
+
+# ------------------------------------------
+# Utility Functions
+# ------------------------------------------
+"""
+    get_periodic_difference(x1::Float64, x2::Float64, L::Float64) -> Float64
+
+Computes the minimum-image (periodic) difference between two points in a 1D periodic box.
+
+# Input:
+- `x1::Float64`: Position of the first point.
+- `x2::Float64`: Position of the second point.
+- `L::Float64`: Length of the periodic box.
+
+# Output:
+- `Float64`: The difference `(x1 - x2)`, mapped to the interval [-L/2, L/2].
+
+# Notes
+Useful for applying periodic boundary conditions and minimum-image convention in simulations.
+"""
+function get_periodic_difference(x1::Float64, x2::Float64, L::Float64)::Float64
+    diff = x1 - x2
+    # Shift to [0, L), then to [-L/2, L/2]
+    return mod(diff + L/2, L) - L/2
+end
+
+function calculate_constants(L::Float64, R_match::Float64)
     C3 = besselk(1, 2/sqrt(R_match))/besselk(0, 2/sqrt(R_match)) * R_match^(-3/2) * (R_match^(-2) - (L-R_match)^(-2))^(-1)
     C2 = exp(4*C3/L)
     C1 = (C2 * exp(-C3/R_match) * exp(-C3/(L-R_match)))/besselk(0, 2/sqrt(R_match))
@@ -30,9 +56,8 @@ Defines the first derivative of the logarithm of the two-body wave function
 """
 function u2_first_derivative(r::Float64, R_match::Float64, L::Float64, Constants::Tuple{Float64, Float64, Float64})::Float64
     if r < 1e-10
-        return 0.0  # or some safe fallback
+        return 0.0
     end
-
     _, _, C3 = Constants
     if r < R_match
         return besselk(1, 2/sqrt(r)) / besselk(0, 2/sqrt(r)) * r^(-3/2)
@@ -57,7 +82,7 @@ function u2_second_derivative(r::Float64, R_match::Float64, L::Float64, Constant
         K2 = besselk(2, 2/sqrt(r))
         return (r)^(-3) * (((K0 * (K0 + K2))/2) - K1^2)/K0^2 - (3/2) * (K1/K0) * r^(-5/2)
     else
-        return - 2* C3/r^3 + 2 * C3/(L-r)^3
+        return - 2* C3/r^3 - 2 * C3/(L-r)^3
     end
 end
 
@@ -93,24 +118,19 @@ function local_interaction_energy(positions::Matrix{Float64}, L::Float64)::Float
 end
 
 """
-    kinetic_energy_log_form(positions, num_part, psi_interp, k_contact, L, α, long_range, fermi_stats, contact) -> Float64
+    local_kinetic_energy(positions, L, R_match, Constants) -> Float64
 
-Evaluates the kinetic energy using the logarithmic-derivative (local energy) form, supporting combinations of contact, Fermi, and long-range terms.
+Evaluates the local kinetic energy of the 2D dipolar Bose gas using the
+logarithmic-derivative form of the Jastrow wavefunction.
 
 # Input:
-- `positions::Matrix{Float64}`: Positions of all particles.
-- `num_part::Int`: Number of particles.
-- `psi_interp`: Interpolated two-body wave function (Spline2D or similar).
-- `k_contact::Float64`: Parameter for Bethe-Peierls contact term.
-- `L::Float64`: Box length.
-- `α::Float64`: Fermi statistics exponent.
-- `long_range::Bool`, `fermi_stats::Bool`, `contact::Bool`: Toggles for each term.
+- `positions::Matrix{Float64}`: 2×N matrix of particle positions.
+- `L::Float64`: Box length (periodic boundary conditions assumed).
+- `R_match::Float64`: Matching distance between short- and long-range regimes of the Jastrow factor.
+- `Constants::Tuple{Float64, Float64, Float64}`: Tuple (C1, C2, C3) of Jastrow constants.
 
 # Output:
-- `Float64`: Total kinetic energy.
-
-# Notes
-Each active contribution (contact, Fermi, long-range) is summed using its logarithmic derivatives, for improved numerical stability in Monte Carlo.
+- `Float64`: Local kinetic energy in dimensionless units.
 """
 function local_kinetic_energy(positions::Matrix{Float64}, L::Float64, R_match::Float64, 
                                 Constants::Tuple{Float64, Float64, Float64})::Float64
@@ -138,275 +158,138 @@ function local_kinetic_energy(positions::Matrix{Float64}, L::Float64, R_match::F
     end
 
     return -0.5 * E_kin
-
-"""
-    local_energy_log(x_coord, num_part, psi_interp, V0, k_lat, L, k_L, k_contact, α, long_range, fermi_stats, reatto_chester, contact)
-        -> Tuple{Float64, Float64, Float64}
-
-Computes the total, kinetic, and potential energies for a configuration using the logarithmic-derivative kinetic form.
-
-# Input:
-- All positions, model, and toggle parameters as above.
-
-# Output:
-- `(E_tot, E_kin, E_pot)`: Total energy, kinetic, and potential.
-
-# Notes
-If long_range is true, the cavity-mediated potential is used; otherwise potential is zero.
-"""
-function local_energy_log(
-    x_coord::Vector{Float64}, num_part::Int, psi_interp,
-    V0::Float64, k_lat::Float64, L::Float64, k_L::Float64, k_contact::Float64, α::Float64,
-    long_range::Bool, fermi_stats::Bool, reatto_chester::Bool, contact::Bool
-)::Tuple{Float64, Float64, Float64}
-
-    kinetic = kinetic_energy_log_form(x_coord, num_part, psi_interp, k_contact, L, α, long_range, fermi_stats, contact)
-    potential = 0.0
-    if long_range
-        potential = interaction_energy(x_coord, num_part, V0, k_lat)
-    end
-
-    return kinetic + potential, kinetic, potential
 end
 
-"""
-    local_energy(x_coord, num_part, psi_interp, V0, k_lat, L, k_L, k_contact, fermi_stats, reatto_chester, contact)
-        -> Tuple{Float64, Float64, Float64}
-
-Computes the local energy for a given configuration via finite-difference kinetic energy and direct evaluation of the interaction energy.
-
-# Input:
-- All positions, model, and toggle parameters as above.
-
-# Output:
-- `(E_tot, E_kin, E_pot)`: Total, kinetic, and potential energies.
-
-# Notes
-The kinetic energy is estimated via central finite differences; the potential is a double sum over all unique pairs.
-If the wave function is zero, Outputs zeros for all energies.
-"""
-function local_energy(
-    x_coord::Vector{Float64}, num_part::Int, psi_interp,
-    V0::Float64, k_lat::Float64, L::Float64, k_L::Float64, k_contact::Float64,
-    fermi_stats::Bool, reatto_chester::Bool, contact::Bool
-)::Tuple{Float64, Float64, Float64}
-    psi_current = trial_wave_function(x_coord, num_part, psi_interp, L, k_L, k_contact, α, long_range, fermi_stats, reatto_chester, contact)
-    if psi_current == 0.0
-        return 0.0, 0.0, 0.0
-    end
-
-    kinetic = 0.0
-    dx = 1e-5
-
-    @inbounds for i in 1:num_part
-        x_plus = copy(x_coord); x_plus[i] += dx
-        x_minus = copy(x_coord); x_minus[i] -= dx
-
-        psi_plus = trial_wave_function(x_plus, num_part, psi_interp, L, k_L, k_contact, α, long_range, fermi_stats, reatto_chester, contact)
-        psi_minus = trial_wave_function(x_minus, num_part, psi_interp, L, k_L, k_contact, α, long_range, fermi_stats, reatto_chester, contact)
-
-        kinetic -= 0.5 * (psi_plus - 2 * psi_current + psi_minus) / (dx^2 * psi_current)
-    end
-
-    potential = 0.0
-    @inbounds for i in 1:num_part
-        @inbounds for j in (i + 1):num_part
-            potential += V0 * cos(k_lat * x_coord[i]) * cos(k_lat * x_coord[j])
-        end
-    end
-
-    return kinetic + potential, kinetic, potential
-end
-# ------------------------------------------
-# Utility Functions
-# ------------------------------------------
-"""
-    get_periodic_difference(x1::Float64, x2::Float64, L::Float64) -> Float64
-
-Computes the minimum-image (periodic) difference between two points in a 1D periodic box.
-
-# Input:
-- `x1::Float64`: Position of the first point.
-- `x2::Float64`: Position of the second point.
-- `L::Float64`: Length of the periodic box.
-
-# Output:
-- `Float64`: The difference `(x1 - x2)`, mapped to the interval [-L/2, L/2].
-
-# Notes
-Useful for applying periodic boundary conditions and minimum-image convention in simulations.
-"""
-function get_periodic_difference(x1::Float64, x2::Float64, L::Float64)::Float64
-    diff = x1 - x2
-    # Shift to [0, L), then to [-L/2, L/2]
-    return mod(diff + L/2, L) - L/2
-end
-
-
-"""
-    map_to_unit_cell(x::Float64) -> Float64
-
-Maps a coordinate `x` to the canonical unit cell [-0.5, 0.5) for systems with unit length.
-
-# Input:
-- `x::Float64`: Coordinate to map.
-
-# Output:
-- `Float64`: `x` mapped to [-0.5, 0.5).
-
-# Notes
-Used to enforce periodicity and symmetry in simulations with unit box length.
-"""
-function map_to_unit_cell(x::Float64)::Float64
-    return mod(x + 0.5, 1.0) - 0.5
-end
-
-"""
-    find_k_contact(L::Float64, a::Float64) -> Float64
-
-Finds the first positive solution `k` to the transcendental equation:
-    k * tan(k L / 2) = -1/a
-
-# Input:
-- `L::Float64`: Length of the periodic box.
-- `a::Float64`: Scattering length (contact interaction parameter).
-
-# Output:
-- `Float64`: The first positive solution `k` (in the interval (0, π/L)).
-
-# Notes
-This is used to construct the Bethe-Peierls pair wave function for contact interactions with periodic boundary conditions.
-"""
-function find_k_contact(L::Float64, a::Float64)::Float64
-    function equation(k)
-        return k * tan(k * L / 2) + 1/a
-    end
-    b = 1e-6
-    c = π / L - 1e-3
-    return find_zero(equation, (b, c), Bisection(); rtol=1e-10)
+function local_energy(positions::Matrix{Float64}, L::Float64, R_match::Float64,Constants::Tuple{Float64, Float64, Float64})::Tuple{Float64, Float64, Float64}
+    E_kin = local_kinetic_energy(positions, L, R_match, Constants)
+    E_int = local_interaction_energy(positions, L)
+    return E_kin + E_int, E_kin, E_int
 end
 
 # ------------------------------------------
 # Creating the Wavefunction
 # ------------------------------------------
 
+# """
+#     trial_wave_function(x_coord, num_part, psi_interp, L, k_L, k_contact, α, long_range, fermi_stats, reatto_chester, contact) -> Float64
 
+# Evaluates the total trial wave function for a set of particle positions, possibly including 
+# Fermi statistics, Reatto-Chester (Jastrow) correlations, contact interaction, and/or long-range cavity-mediated interaction.
 
-"""
-    trial_wave_function(x_coord, num_part, psi_interp, L, k_L, k_contact, α, long_range, fermi_stats, reatto_chester, contact) -> Float64
+# # Input:
+# - `x_coord::Vector{Float64}`: Vector of particle positions.
+# - `num_part::Int`: Number of particles.
+# - `psi_interp`: Interpolated two-body wave function (e.g. Spline2D object).
+# - `L::Float64`: Box length (system size).
+# - `k_L::Float64`: Reatto-Chester parameter (Jastrow exponent).
+# - `k_contact::Float64`: Parameter for the contact (Bethe-Peierls) term.
+# - `α::Float64`: Exponent for Fermi statistics factor.
+# - `long_range::Bool`: Whether to include long-range (cavity-mediated) term.
+# - `fermi_stats::Bool`: Whether to include Fermi statistics factor.
+# - `reatto_chester::Bool`: Whether to include Reatto-Chester factor.
+# - `contact::Bool`: Whether to include contact interaction factor.
 
-Evaluates the total trial wave function for a set of particle positions, possibly including 
-Fermi statistics, Reatto-Chester (Jastrow) correlations, contact interaction, and/or long-range cavity-mediated interaction.
+# # Output:
+# - `Float64`: Value of the total trial wave function for the given configuration.
 
-# Input:
-- `x_coord::Vector{Float64}`: Vector of particle positions.
-- `num_part::Int`: Number of particles.
-- `psi_interp`: Interpolated two-body wave function (e.g. Spline2D object).
-- `L::Float64`: Box length (system size).
-- `k_L::Float64`: Reatto-Chester parameter (Jastrow exponent).
-- `k_contact::Float64`: Parameter for the contact (Bethe-Peierls) term.
-- `α::Float64`: Exponent for Fermi statistics factor.
-- `long_range::Bool`: Whether to include long-range (cavity-mediated) term.
-- `fermi_stats::Bool`: Whether to include Fermi statistics factor.
-- `reatto_chester::Bool`: Whether to include Reatto-Chester factor.
-- `contact::Bool`: Whether to include contact interaction factor.
+# # Notes
+# Loops over all unique pairs (i < j) and multiplies together the selected two-body terms.
+# The long-range term uses the interpolated two-body wave function.
+# """
+# function trial_wave_function(
+#     x_coord::Vector{Float64}, y_coord::Vector{Float64}, num_part::Int,
+#     L::Float64, R_match::Float64, Constants::Tuple{Float64, Float64, Float64})::Float64
+#     Psi_tot = 1.0
 
-# Output:
-- `Float64`: Value of the total trial wave function for the given configuration.
+#     C1 = Constants[1]
+#     C2 = Constants[2]
+#     C3 = Constants[3]
 
-# Notes
-Loops over all unique pairs (i < j) and multiplies together the selected two-body terms.
-The long-range term uses the interpolated two-body wave function.
-"""
-function trial_wave_function(
-    x_coord::Vector{Float64}, y_coord::Vector{Float64}, num_part::Int,
-    L::Float64, R_match::Float64, Constants::Tuple{Float64, Float64, Float64})::Float64
-    Psi_tot = 1.0
+#     @inbounds for i in 1:num_part
+#         @inbounds for j in (i + 1):num_part
+#             dx = get_periodic_difference(x_coord[i], x_coord[j], L)
+#             dy = get_periodic_difference(y_coord[i], y_coord[j], L)
+#             r = sqrt(dx^2 + dy^2)
+            
+#             if r < 1e-10
+#                 return 0.0
+#             end
 
-    C1 = Constants[1]
-    C2 = Constants[2]
-    C3 = Constants[3]
+#             if r < R_match
+#                 Psi_tot *= C1 * besselk(0, 2/sqrt(r))
+#             else
+#                 Psi_tot *= C2 * exp(-C3/r) * exp(-C3/(L-r))
+#             end
+#         end 
+#     end
+#     return Psi_tot
+# end
 
-    @inbounds for i in 1:num_part
-        @inbounds for j in (i + 1):num_part
-            dx = get_periodic_difference(x_coord[i], x_coord[j], L)
-            dy = get_periodic_difference(y_coord[i], y_coord[j], L)
-            r = sqrt(dx^2 + dy^2)
-            if r < R_match
-                Psi_tot *= C1 * besselk(0, 2/sqrt(r))
-            else
-                Psi_tot *= C2 * exp(-C3/r) * exp(-C3/(L-r))
-            end
-        end 
-    end
-    return Psi_tot
-end
+# """
+#     update_wave_function_after_move(x_coord, x_new, num_part, psi_interp, L, k_L, k_contact, α, long_range, fermi_stats, reatto_chester, contact) -> Float64
 
-"""
-    update_wave_function_after_move(x_coord, x_new, num_part, psi_interp, L, k_L, k_contact, α, long_range, fermi_stats, reatto_chester, contact) -> Float64
+# Computes the ratio Ψ_new/Ψ_old of trial wave functions for a move, 
+# efficiently updating only the necessary pair terms.
 
-Computes the ratio Ψ_new/Ψ_old of trial wave functions for a move, 
-efficiently updating only the necessary pair terms.
+# # Input:
+# - `x_coord::Vector{Float64}`: Old configuration (positions).
+# - `x_new::Vector{Float64}`: New configuration (positions; typically only one coordinate differs).
+# - `num_part::Int`: Number of particles.
+# - `psi_interp`: Interpolated two-body wave function (Spline2D).
+# - `L::Float64`, `k_L::Float64`, `k_contact::Float64`, `α::Float64`: Same as in `trial_wave_function`.
+# - `long_range::Bool`, `fermi_stats::Bool`, `reatto_chester::Bool`, `contact::Bool`: Term selection.
 
-# Input:
-- `x_coord::Vector{Float64}`: Old configuration (positions).
-- `x_new::Vector{Float64}`: New configuration (positions; typically only one coordinate differs).
-- `num_part::Int`: Number of particles.
-- `psi_interp`: Interpolated two-body wave function (Spline2D).
-- `L::Float64`, `k_L::Float64`, `k_contact::Float64`, `α::Float64`: Same as in `trial_wave_function`.
-- `long_range::Bool`, `fermi_stats::Bool`, `reatto_chester::Bool`, `contact::Bool`: Term selection.
+# # Output:
+# - `Float64`: The ratio Ψ_new / Ψ_old for the proposed move.
 
-# Output:
-- `Float64`: The ratio Ψ_new / Ψ_old for the proposed move.
-
-# Notes
-Loops only over pairs involving the moved particle(s) for efficiency.
-"""
-function update_wave_function_after_move(
-    x_coord::Vector{Float64}, x_new::Vector{Float64}, num_part::Int,
-    psi_interp, L::Float64, k_L::Float64, k_contact::Float64, α::Float64,
-    long_range::Bool, fermi_stats::Bool, reatto_chester::Bool, contact::Bool
-)::Float64
-    psi_ratio = 1.0
-    @inbounds for i in 1:num_part
-        if x_coord[i] != x_new[i]
-            @inbounds for j in 1:num_part
-                if i != j
-                    if fermi_stats
-                        # Fermi statistics: node at coincident positions, exponent α
-                        psi_ratio *= (sin((π/L) * (x_new[i] - x_new[j])) / sin((π/L) * (x_coord[i] - x_coord[j])))^α
-                    end
-                    if reatto_chester
-                        # Jastrow-like (Reatto-Chester) factor
-                        psi_ratio *= abs(sin((π/L) * (x_new[i] - x_new[j])))^k_L / abs(sin((π/L) * (x_coord[i] - x_coord[j])))^k_L
-                    end
-                    if contact
-                        # Bethe-Peierls contact interaction
-                        dist_mod_new = abs(get_periodic_difference(x_new[i], x_new[j], L)) - L/2
-                        dist_mod_old = abs(get_periodic_difference(x_coord[i], x_coord[j], L)) - L/2
-                        psi_ratio *= cos(k_contact * dist_mod_new) / cos(k_contact * dist_mod_old)
-                    end
-                    if long_range
-                        # Cavity-mediated long-range interaction, interpolated on unit cell
-                        x_new_per_1 = map_to_unit_cell(x_new[i])
-                        x_new_per_2 = map_to_unit_cell(x_new[j])
-                        x_coord_per_1 = map_to_unit_cell(x_coord[i])
-                        x_coord_per_2 = map_to_unit_cell(x_coord[j])
-                        psi_ratio *= evaluate(psi_interp, x_new_per_1, x_new_per_2) / evaluate(psi_interp, x_coord_per_1, x_coord_per_2)
-                    end
-                end
-            end
-        end
-    end
-    return psi_ratio
-end
+# # Notes
+# Loops only over pairs involving the moved particle(s) for efficiency.
+# """
+# function update_wave_function_after_move(
+#     x_coord::Vector{Float64}, x_new::Vector{Float64}, num_part::Int,
+#     psi_interp, L::Float64, k_L::Float64, k_contact::Float64, α::Float64,
+#     long_range::Bool, fermi_stats::Bool, reatto_chester::Bool, contact::Bool
+# )::Float64
+#     psi_ratio = 1.0
+#     @inbounds for i in 1:num_part
+#         if x_coord[i] != x_new[i]
+#             @inbounds for j in 1:num_part
+#                 if i != j
+#                     if fermi_stats
+#                         # Fermi statistics: node at coincident positions, exponent α
+#                         psi_ratio *= (sin((π/L) * (x_new[i] - x_new[j])) / sin((π/L) * (x_coord[i] - x_coord[j])))^α
+#                     end
+#                     if reatto_chester
+#                         # Jastrow-like (Reatto-Chester) factor
+#                         psi_ratio *= abs(sin((π/L) * (x_new[i] - x_new[j])))^k_L / abs(sin((π/L) * (x_coord[i] - x_coord[j])))^k_L
+#                     end
+#                     if contact
+#                         # Bethe-Peierls contact interaction
+#                         dist_mod_new = abs(get_periodic_difference(x_new[i], x_new[j], L)) - L/2
+#                         dist_mod_old = abs(get_periodic_difference(x_coord[i], x_coord[j], L)) - L/2
+#                         psi_ratio *= cos(k_contact * dist_mod_new) / cos(k_contact * dist_mod_old)
+#                     end
+#                     if long_range
+#                         # Cavity-mediated long-range interaction, interpolated on unit cell
+#                         x_new_per_1 = map_to_unit_cell(x_new[i])
+#                         x_new_per_2 = map_to_unit_cell(x_new[j])
+#                         x_coord_per_1 = map_to_unit_cell(x_coord[i])
+#                         x_coord_per_2 = map_to_unit_cell(x_coord[j])
+#                         psi_ratio *= evaluate(psi_interp, x_new_per_1, x_new_per_2) / evaluate(psi_interp, x_coord_per_1, x_coord_per_2)
+#                     end
+#                 end
+#             end
+#         end
+#     end
+#     return psi_ratio
+# end
 
 # ------------------------------------------
 # System Initialization and Particle Moves
 # ------------------------------------------
 
 """
-    random_initial_config(num_part::Int, L::Float64) -> Vector{Float64}
+    random_initial_config(num_part::Int, L::Float64) -> Matrix{Float64}
 
 Generates a random initial configuration of `num_part` particles uniformly distributed in a 1D periodic box of length `L`.
 
@@ -415,39 +298,44 @@ Generates a random initial configuration of `num_part` particles uniformly distr
 - `L::Float64`: Length of the simulation box.
 
 # Output:
-- `Vector{Float64}`: Positions of all particles, each in the interval [-L/2, L/2].
+- `Matrix{Float64}`: Positions of all particles, each in the interval [-L/2, L/2].
 
 # Notes
 Particle positions are initialized randomly and independently with uniform probability over the full simulation box.
 """
-function random_initial_config(num_part::Int, L::Float64)::Vector{Float64}
-    return L .* rand(num_part) .- L/2  # Random initial configuration in the range [-L/2, L/2]
+function random_initial_config(num_part::Int, L::Float64)::Matrix{Float64}
+    return L .* rand(2, num_part) .- L/2  # Random initial configuration in the range [-L/2, L/2]
 end
 
 """
-    move_one_part(x_coord::Vector{Float64}, num_part::Int, delta::Float64, L::Float64) -> Tuple{Vector{Float64}, Int}
+    move_one_part(x_coord::Vector{Float64}, y_coord::Vector{Float64}, num_part::Int, delta::Float64, L::Float64) -> Tuple{Int, Vector{Float64}, Vector{Float64}}
 
 Proposes a random move for a single particle by displacing it within [-delta, delta] and applying periodic boundary conditions.
 
 # Input:
-- `x_coord::Vector{Float64}`: Current positions of all particles.
+- `x_coord::Vector{Float64}`: Current positions of all particles in the x direction.
+- `y_coord::Vector{Float64}`: Current positions of all particles in the y direction.
 - `num_part::Int`: Number of particles.
 - `delta::Float64`: Maximum displacement (half-width of the move interval).
 - `L::Float64`: Length of the simulation box.
 
 # Output:
-- `Vector{Float64}`: New positions after the proposed move (with periodicity).
 - `Int`: Index of the particle that was moved.
+- `Vector{Float64}`: New positions in the x direction after the proposed move (with periodicity).
+- `Vector{Float64}`: New positions in the y direction after the proposed move (with periodicity).
 
 # Notes
 A particle is selected at random and displaced by a random amount in [-delta, delta]. The new position is wrapped to the periodic box using the minimum image convention.
 """
-function move_one_part(x_coord::Vector{Float64}, num_part::Int, delta::Float64, L::Float64)::Tuple{Vector{Float64}, Int}
+function move_one_part(x_coord::Vector{Float64}, y_coord::Vector{Float64}, num_part::Int, delta::Float64, L::Float64)::Tuple{Int, Vector{Float64}, Vector{Float64}}
     x_coord_new = copy(x_coord)
-    idx = rand(1:num_part)  # Choose a random particle to move
-    x_coord_new[idx] += rand() * (2 * delta) - delta  # Displacement in [-delta, delta]
-    x_coord_new[idx] = get_periodic_difference(x_coord_new[idx], 0.0, L)  # Apply periodic boundary conditions
-    return x_coord_new, idx
+    y_coord_new = copy(y_coord)
+    id = rand(1:num_part)
+    x_coord_new[id] += rand() * (2 * delta) - delta  # Displacement in [-delta, delta]
+    x_coord_new[id] = get_periodic_difference(x_coord_new[id], 0.0, L)  # Apply periodic boundary conditions
+    y_coord_new[id] += rand() * (2 * delta) - delta  # Displacement in [-delta, delta]
+    y_coord_new[id] = get_periodic_difference(y_coord_new[id], 0.0, L)  # Apply periodic boundary conditions
+    return id, x_coord_new, y_coord_new
 end
 
 # ------------------------------------------
