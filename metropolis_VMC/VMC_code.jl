@@ -33,58 +33,6 @@ function calculate_constants(L::Float64, R_match::Float64)
     return C1, C2, C3
 end
 
-"""
-    u2(r::Float64) -> Float64
-Defines the logarithm of the two-body wave function
-"""
-function u2(r::Float64, R_match::Float64, L::Float64, Constants::Tuple{Float64, Float64, Float64})::Float64
-    if r < 1e-10
-        return 0.0  # or some safe fallback
-    end
-
-    C1, C2, C3 = Constants
-    if r < R_match
-        return log(C1) + log(besselk(0, 2/sqrt(r)))
-    else
-        return log(C2) - C3/r - C3/(L-r)
-    end
-end
-
-"""
-    u2_first_derivative(r::Float64, R_match::Float64, L::Float64, Constants::Tuple{Float64, Float64, Float64})::Float64
-Defines the first derivative of the logarithm of the two-body wave function
-"""
-function u2_first_derivative(r::Float64, R_match::Float64, L::Float64, Constants::Tuple{Float64, Float64, Float64})::Float64
-    if r < 1e-10
-        return 0.0
-    end
-    _, _, C3 = Constants
-    if r < R_match
-        return besselk(1, 2/sqrt(r)) / besselk(0, 2/sqrt(r)) * r^(-3/2)
-    else
-        return C3/r^2 - C3/(L-r)^2
-    end
-end
-
-"""
-    u2_second_derivative(r::Float64, R_match::Float64, L::Float64, Constants::Tuple{Float64, Float64, Float64})::Float64
-Defines the second derivative of the logarithm of the two-body wave function
-"""
-function u2_second_derivative(r::Float64, R_match::Float64, L::Float64, Constants::Tuple{Float64, Float64, Float64})::Float64
-    if r < 1e-10
-        return 0.0
-    end
-
-    _, _, C3 = Constants
-    if r < R_match
-        K0 = besselk(0, 2/sqrt(r))
-        K1 = besselk(1, 2/sqrt(r))
-        K2 = besselk(2, 2/sqrt(r))
-        return (r)^(-3) * (((K0 * (K0 + K2))/2) - K1^2)/K0^2 - (3/2) * (K1/K0) * r^(-5/2)
-    else
-        return - 2* C3/r^3 - 2 * C3/(L-r)^3
-    end
-end
 
 # ========== Energy Calculations ==========
 
@@ -313,6 +261,9 @@ function metropolis(num_part::Int, num_steps::Int, num_bins::Int, delta::Float64
     step_block = 1
     E_tot = 0.0
     E_sq = 0.0
+    E_kin = 0.0
+    E_int = 0.0
+
     energy_trace = Float64[]
     step_trace = Int[]
     # E_local_values = Vector{Float64}(undef, (num_steps÷step_block))
@@ -365,10 +316,13 @@ function metropolis(num_part::Int, num_steps::Int, num_bins::Int, delta::Float64
 
             E_tot += E_local
             E_sq += E_local^2
+            E_kin += E_kinetic
+            E_int += E_potential
+
             n_uncorr += 1
             if i % plot_every == 0
                 push!(step_trace, i)
-                push!(energy_trace, E_local / num_part)
+                push!(energy_trace, E_kinetic / num_part)
 
             end
             
@@ -402,45 +356,5 @@ function metropolis(num_part::Int, num_steps::Int, num_bins::Int, delta::Float64
     # hist_2d ./= (sum(hist_2d) * dx^2)
     # SSF ./= n_uncorr
 
-    return E_tot / n_uncorr, E_sq / n_uncorr, acceptance_ratio / num_steps
+    return E_tot / n_uncorr, E_sq / n_uncorr, acceptance_ratio / num_steps, E_kin / n_uncorr, E_int / n_uncorr
 end
-
-
-#System parameters
-n = 32
-num_part = 5
-L = sqrt(num_part/n)
-
-println("Density n = ", n)
-println("Number of particles: ", num_part)
-println("L = ", L)
-
-#Simulation parameters
-R_match_vals = LinRange(0.01, L, 100) # Matching radius to validate continuity of f2
-
-results_path = joinpath(@__DIR__, "R_match_energy_results.txt")
-R_match_vals_vec = collect(R_match_vals)
-energy_means = Vector{Float64}(undef, length(R_match_vals_vec))
-energy_sq_means = Vector{Float64}(undef, length(R_match_vals_vec))
-acceptance_ratio_vec = Vector{Float64}(undef, length(R_match_vals_vec))
-
-@threads for idx in eachindex(R_match_vals_vec)
-    R_match = R_match_vals_vec[idx]
-    num_steps = 10^6
-    num_bins = 100
-    delta = 0.1
-    Constants = calculate_constants(L, R_match)
-    E_mean, E_sq_mean, acceptance_ratio = metropolis(num_part, num_steps, num_bins, delta, L, R_match, Constants; live_plot=false, plot_every=10^3)
-    energy_means[idx] = E_mean
-    energy_sq_means[idx] = E_sq_mean
-    acceptance_ratio_vec[idx] = acceptance_ratio
-end
-
-open(results_path, "w") do io
-    println(io, "R_match\tMeanEnergyPerParticle\tMeanSquaredEnergy\tAcceptanceRatio")
-    for idx in eachindex(R_match_vals_vec)
-        println(io, "$(R_match_vals_vec[idx])\t$(energy_means[idx])\t$(energy_sq_means[idx])\t$(acceptance_ratio_vec[idx])")
-    end
-end
-
-println("Saved sweep results to: ", results_path)
