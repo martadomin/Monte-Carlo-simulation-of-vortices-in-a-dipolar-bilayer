@@ -1,6 +1,6 @@
-include("utils.jl")
-include("energy.jl")
-include("jastrow.jl")
+include(normpath(joinpath(@__DIR__, "utils.jl")))
+include(normpath(joinpath(@__DIR__, "jastrow.jl")))
+include(normpath(joinpath(@__DIR__, "energy.jl")))
 
 using Random, ProgressMeter, Plots
 
@@ -53,6 +53,42 @@ function compute_ΔlogΨ(x_old::Vector{Float64}, y_old::Vector{Float64}, x_new::
     return ΔlogΨ
 end
 
+function tune_delta(
+    x_coord::Vector{Float64},
+    y_coord::Vector{Float64},
+    L::Float64,
+    R_match::Float64,
+    Constants::Tuple{Float64, Float64, Float64};
+    target_ratio::Float64 = 0.5,
+    num_tune_steps::Int = 10^4,
+    block_size::Int = 100
+)::Tuple{Float64, Vector{Float64}, Vector{Float64}}
+
+    delta = 0.1 * L  # initial guess
+
+    for _ in 1:num_tune_steps÷block_size
+        accepted = 0
+        for _ in 1:block_size
+            moved_id, x_new, y_new = move_one_part(x_coord, y_coord, delta, L)
+            ΔlogΨ = compute_ΔlogΨ(x_coord, y_coord, x_new, y_new,
+                                   R_match, L, Constants, moved_id)
+            if log(rand()) < 2 * ΔlogΨ
+                x_coord = x_new
+                y_coord = y_new
+                accepted += 1
+            end
+        end
+        # adjust delta to push acceptance ratio towards target
+        ratio = accepted / block_size
+        delta *= ratio / target_ratio
+        delta = min(delta, L/2)  
+        delta = max(delta, 1e-6) 
+    end
+
+    return delta, x_coord, y_coord
+end
+
+
 """
     metropolis(num_part, num_steps, delta, L, R_match, Constants, final_energy_plot, plot_every)
 
@@ -80,7 +116,7 @@ Call this function to simulate the equilibrium properties of the system, and to 
 
 # Example
 ```julia
-E_tot, E_sq, acceptance_ratio, E_kin, E_int = metropolis(30, 10^6, 0.1, sqrt(30), 0.5, (1.0, 1.0, 1.0); final_energy_plot=false, plot_every=100)
+E_tot, E_sq, acceptance_ratio, E_kin, E_int, E_tot_drift = metropolis(30, 10^6, 0.1, sqrt(30), 0.5, (1.0, 1.0, 1.0); final_energy_plot=false, plot_every=100)
 """
 
 function metropolis(
@@ -93,8 +129,10 @@ function metropolis(
     x_init::Union{Vector{Float64}, Nothing} = nothing,
     y_init::Union{Vector{Float64}, Nothing} = nothing,
     final_energy_plot::Bool = false,
-    plot_every::Int = 100
-)::Tuple{Float64, Float64, Float64, Float64, Float64}
+    plot_every::Int = 100,
+    progress::Bool = true
+    )::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Float64, Float64, Float64, Float64, Float64, Float64, Float64}
+
     acceptance_ratio = 0.0
     n_uncorr = 0
     step_block = 1
@@ -102,9 +140,15 @@ function metropolis(
     E_sq = 0.0
     E_kin = 0.0
     E_int = 0.0
-
-    energy_trace = Float64[]
-    step_trace = Int[]
+    E_tot_drift = 0.0
+    E_tot_laplacian = 0.0
+    energies = Float64[]
+    energies_drift = Float64[]
+    energies_laplacian = Float64[]
+    energy_plot = Float64[]
+    energy_plot_1 = Float64[]
+    energy_plot_2 = Float64[]
+    step_plot = Int[]
     
     if x_init === nothing || y_init === nothing
         x_coord, y_coord = random_initial_config(num_part, L, "Uniform")
@@ -113,9 +157,14 @@ function metropolis(
         y_coord = copy(y_init)
     end
     
-    progress = Progress(num_steps; desc="Running Metropolis $num_part...", showspeed=true)
+    if progress == true
+        progress_bar = Progress(num_steps; desc="Running Metropolis $num_part...", showspeed=true)
+    end
+
     for i in 1:num_steps
-        next!(progress)
+        if progress == true
+            next!(progress_bar)
+        end
 
         moved_id, x_new, y_new = move_one_part(x_coord, y_coord, delta, L)
 
@@ -126,11 +175,13 @@ function metropolis(
             y_coord = y_new
             acceptance_ratio += 1
         end
-    
+        
         if i % step_block == 0
+            E_local, E_local_drift, E_local_laplacian, E_kinetic, E_potential = local_energy(x_coord, y_coord, L, R_match, Constants)
+            push!(energies, E_local)
+            push!(energies_drift, E_local_drift)
+            push!(energies_laplacian, E_local_laplacian)
 
-            E_local, E_kinetic, E_potential = local_energy(x_coord, y_coord, L, R_match, Constants)
-            
             if isnan(E_local)
                 @warn "NaN detected at step $i: E_local = $E_local"
                 continue  # Skip this iteration to avoid polluting data
@@ -140,11 +191,15 @@ function metropolis(
             E_sq += E_local^2
             E_kin += E_kinetic
             E_int += E_potential
+            E_tot_drift += E_local_drift
+            E_tot_laplacian += E_local_laplacian
 
             n_uncorr += 1
             if i % plot_every == 0
-                push!(step_trace, i)
-                push!(energy_trace, E_kinetic / num_part)
+                push!(step_plot, i)
+                push!(energy_plot, E_local_drift / num_part)
+                push!(energy_plot_1, E_local_laplacian / num_part)
+                push!(energy_plot_2, E_local / num_part)
 
             end
         end
@@ -152,8 +207,8 @@ function metropolis(
 
     if final_energy_plot
         energy_plot = plot(
-        step_trace,
-        energy_trace,
+        step_plot,
+        energy_plot,
         xlabel="Step",
         ylabel="Local energy per particle",
         title="Energy evolution",
@@ -161,10 +216,23 @@ function metropolis(
         lw=2,
         )
         display(energy_plot)
-        readline()
+        # Si ejecutas desde terminal, esto evita que el script termine y cierre el plot
+        println("\n>>> Gráfico de energía generado. Presiona ENTER para continuar...")
+        if !isinteractive() # Solo bloquea si no estás en un REPL interactivo
+            readline()
+        end
     end
 
     println("Acceptance ratio: ", acceptance_ratio / num_steps)
 
-    return E_tot / n_uncorr, E_sq / n_uncorr, acceptance_ratio / num_steps, E_kin / n_uncorr, E_int / n_uncorr
+    return energies,
+            energies_drift,
+            energies_laplacian,
+            E_tot / n_uncorr,
+            E_sq / n_uncorr,
+            E_tot_drift / n_uncorr,
+            E_tot_laplacian / n_uncorr,
+            E_kin / n_uncorr,
+            E_int / n_uncorr,
+            acceptance_ratio / num_steps
 end

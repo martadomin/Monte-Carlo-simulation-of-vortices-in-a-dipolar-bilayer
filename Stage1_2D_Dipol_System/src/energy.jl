@@ -49,10 +49,12 @@ logarithmic-derivative form of the Jastrow wavefunction.
 - `Float64`: Local kinetic energy in dimensionless units.
 """
 function local_kinetic_energy(xcoord::Vector{Float64}, ycoord::Vector{Float64}, L::Float64, R_match::Float64, 
-                                Constants::Tuple{Float64, Float64, Float64})::Float64
+                                Constants::Tuple{Float64, Float64, Float64})::Tuple{Float64, Float64, Float64}
     
     num_part = length(xcoord)
     E_kin = 0.0
+    F_drift_sq = 0.0
+    Scalar_term_sum = 0.0
 
     @inbounds for k in 1:num_part
         F_drift_x = 0.0
@@ -60,8 +62,8 @@ function local_kinetic_energy(xcoord::Vector{Float64}, ycoord::Vector{Float64}, 
         scalar_term = 0.0
         for i in 1:num_part
             if i != k
-                dx = get_periodic_difference(xcoord[i], xcoord[k], L)
-                dy = get_periodic_difference(ycoord[i], ycoord[k], L)
+                dx = get_periodic_difference(xcoord[k], xcoord[i], L)
+                dy = get_periodic_difference(ycoord[k], ycoord[i], L)
                 r = sqrt(dx^2 + dy^2)
                 r_safe = max(r, eps(Float64))
                 du_dr = u2_first_derivative(r_safe, R_match, L, Constants)
@@ -72,8 +74,10 @@ function local_kinetic_energy(xcoord::Vector{Float64}, ycoord::Vector{Float64}, 
             end
         end
         E_kin += (F_drift_x^2 + F_drift_y^2 + scalar_term)
+        F_drift_sq += F_drift_x^2 + F_drift_y^2
+        Scalar_term_sum += scalar_term
     end
-    return -0.5 * E_kin
+    return -0.5 * E_kin, 0.5*F_drift_sq,  -0.25 * Scalar_term_sum
 end
 
 """
@@ -89,11 +93,15 @@ Calculates the local energy (kinetic + interaction) for a given configuration of
 - `Constants::Tuple{Float64, Float64, Float64}`: Tuple (C1, C2, C3) of Jastrow constants.
 
 # Output:
-- `Tuple{Float64, Float64, Float64}`: A tuple containing (E_total, E_kinetic, E_interaction).
+- `Tuple{Float64, Float64, Float64, Float64}`: A tuple containing (E_total, E_kinetic, E_interaction).
 """
-function local_energy(xcoord::Vector{Float64}, ycoord::Vector{Float64}, L::Float64, R_match::Float64, Constants::Tuple{Float64, Float64, Float64})::Tuple{Float64, Float64, Float64}
-    E_kin = local_kinetic_energy(xcoord, ycoord, L, R_match, Constants)
+function local_energy(xcoord::Vector{Float64}, ycoord::Vector{Float64}, L::Float64, R_match::Float64, Constants::Tuple{Float64, Float64, Float64})::Tuple{Float64, Float64, Float64, Float64, Float64}
+    E_kin, E_kin_drift, E_kin_laplacian = local_kinetic_energy(xcoord, ycoord, L, R_match, Constants)
     E_int = local_interaction_energy(xcoord, ycoord, L)
-    return E_kin + E_int, E_kin, E_int
+    return E_kin + E_int, # Total energy
+           E_kin_drift + E_int, # Energy from drift estimator
+           E_kin_laplacian + E_int, # Energy from laplacian estimator
+           E_kin, # Kinetic energy only
+           E_int # Interaction energy only
 end
 
