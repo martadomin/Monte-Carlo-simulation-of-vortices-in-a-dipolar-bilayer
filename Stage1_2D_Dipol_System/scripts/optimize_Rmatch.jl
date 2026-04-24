@@ -25,16 +25,19 @@ results_path = joinpath(@__DIR__, "..", "data", "sweep_results",
 open(results_path, "w") do io
     println(io, "# Coarse sweep")
     println(io, "R_match\tEnergy\tDrift_Energy\tLaplacian_Energy")
-    for (r, e, error_e, e_drift, error_drift, e_laplacian, error_laplacian) in zip(results_coarse.R_match_vals, results_coarse.energies, results_coarse.error, results_coarse.energies_drift, results_coarse.error_drift, results_coarse.energies_laplacian, results_coarse.error_laplacian)
-        println(io, "$(r)\t$(e)\t$(error_e)\t$(e_drift)\t$(error_drift)\t$(e_laplacian)\t$(error_laplacian)")
+    for (r, e, e_drift, e_laplacian) in zip(results_coarse.R_match_vals, results_coarse.energies, results_coarse.energies_drift, results_coarse.energies_laplacian)
+        println(io, "$(r)\t$(e)\t$(e_drift)\t$(e_laplacian)")
     end
     println(io, "\n# Fine sweep")
     println(io, "R_match\tEnergy\tDrift_Energy\tLaplacian_Energy")
-    for (r, e, error_e, e_drift, error_drift, e_laplacian, error_laplacian) in zip(results_fine.R_match_vals, results_fine.energies, results_fine.error, results_fine.energies_drift, results_fine.error_drift, results_fine.energies_laplacian, results_fine.error_laplacian)
-        println(io, "$(r)\t$(e)\t$(error_e)\t$(e_drift)\t$(error_drift)\t$(e_laplacian)\t$(error_laplacian)")
+    for (r, e, e_drift, e_laplacian) in zip(results_fine.R_match_vals, results_fine.energies, results_fine.energies_drift, results_fine.energies_laplacian)
+        println(io, "$(r)\t$(e)\t$(e_drift)\t$(e_laplacian)")
     end
     println(io, "\n# Optimal R_match")
     println(io, "R_opt\tE_opt")
     println(io, "$(R_opt)\t$(minimum(results_fine.energies))")
 end
 println("Saved sweep results to: ", results_path)
+
+R_match = R_opt  # make R_match available globally for run_vmc.jl
+println("R_match set to R_opt = $R_match")

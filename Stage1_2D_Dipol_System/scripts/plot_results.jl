@@ -4,8 +4,7 @@
 
 using Plots, LaTeXStrings
 
-num_part = 30
-nr0_sq = 16.0
+nr0_sq_32 = num_part * nr0_sq^(3/2)
 
 println("Reading results for N = $num_part, nr0^2 = $nr0_sq")
 
@@ -14,23 +13,21 @@ gr()
 # ------------------------------------------
 # Load results
 # ------------------------------------------
-# rmatch_path = joinpath(@__DIR__, "..", "data", "sweep_results",
-#               "Rmatch_sweep_N$(num_part)_nr0sq$(nr0_sq).txt")
+rmatch_path = joinpath(@__DIR__, "..", "data", "sweep_results",
+              "Rmatch_sweep_N$(num_part)_nr0sq$(nr0_sq).txt")
 
-rmatch_path = "C:\\Users\\marta\\Monte_Carlo_simulation_of_vortices_in_a_dipolar_layer\\Stage1_2D_Dipol_System\\data\\sweep_results\\Rmatch_sweep_N30_nr0sq16.0.txt"
-
-# vmc_path = joinpath(@__DIR__, "..", "data", "results",
-#            "vmc_N$(num_part)_nr0sq$(nr0_sq).txt")
+vmc_path = joinpath(@__DIR__, "..", "data", "results",
+           "vmc_N$(num_part)_nr0sq$(nr0_sq).txt")
 
 vmc_path = "C:\\Users\\marta\\Monte_Carlo_simulation_of_vortices_in_a_dipolar_layer\\Stage1_2D_Dipol_System\\data\\results\\vmc_N30_nr0sq16.0.txt"
 
 # Parse R_match sweep file
-R_coarse, E_coarse = Float64[], Float64[] 
-R_coarse_drift, E_coarse_drift = Float64[], Float64[]
-R_coarse_laplacian, E_coarse_laplacian = Float64[], Float64[]
-R_fine, E_fine = Float64[], Float64[]
-R_fine_drift, E_fine_drift = Float64[], Float64[]
-R_fine_laplacian, E_fine_laplacian = Float64[], Float64[]
+R_coarse, E_coarse, error_coarse = Float64[], Float64[], Float64[]
+R_coarse_drift, E_coarse_drift, error_coarse_drift = Float64[], Float64[], Float64[]
+R_coarse_laplacian, E_coarse_laplacian, error_coarse_laplacian = Float64[], Float64[], Float64[]
+R_fine, E_fine, error_fine = Float64[], Float64[], Float64[]
+R_fine_drift, E_fine_drift, error_fine_drift = Float64[], Float64[], Float64[]
+R_fine_laplacian, E_fine_laplacian, error_fine_laplacian = Float64[], Float64[], Float64[]
 R_opt, E_opt = Ref(0.0), Ref(0.0)
 
 open(rmatch_path, "r") do io
@@ -63,7 +60,7 @@ println("Optimal R_match from file: ", R_opt[])
 # Plot 1: R_match sweep
 # ------------------------------------------
 # Add error bars to the plot
-p1 = plot(R_coarse, E_coarse ./ (num_part * nr0_sq^(3/2)),
+p1 = plot(R_coarse, E_coarse ./ nr0_sq_32,
           label=L"\textrm{Coarse \; sweep}",
           xlabel=L"R_{\mathrm{match}}",
           ylabel=L"E/N \cdot (nr_0^2)^{-3/2}",
@@ -72,27 +69,27 @@ p1 = plot(R_coarse, E_coarse ./ (num_part * nr0_sq^(3/2)),
           linewidth=2,
           legend=:topleft)
 
-plot!(R_fine, E_fine ./ (num_part * nr0_sq^(3/2)),
+plot!(R_fine, E_fine ./ nr0_sq_32,  
       label=L"\textrm{Fine \; sweep}",
       marker=:circle,
       linewidth=2)
       
-plot!(R_coarse_drift, E_coarse_drift ./ (num_part * nr0_sq^(3/2)),
+plot!(R_coarse_drift, E_coarse_drift ./ nr0_sq_32,
       label=L"\textrm{Coarse \; sweep (drift)}",
       marker=:diamond,
       linewidth=2)
-
-plot!(R_fine_drift, E_fine_drift ./ (num_part * nr0_sq^(3/2)),
+    
+plot!(R_fine_drift, E_fine_drift ./ nr0_sq_32,
       label=L"\textrm{Fine \; sweep (drift)}",
       marker=:diamond,
       linewidth=2)
 
-plot!(R_coarse_laplacian, E_coarse_laplacian ./ (num_part * nr0_sq^(3/2)),
+plot!(R_coarse_laplacian, E_coarse_laplacian ./ nr0_sq_32,
       label=L"\textrm{Coarse \; sweep (Laplacian)}",
       marker=:square,
       linewidth=2)
 
-plot!(R_fine_laplacian, E_fine_laplacian ./ (num_part * nr0_sq^(3/2)),
+plot!(R_fine_laplacian, E_fine_laplacian ./ nr0_sq_32,
       label=L"\textrm{Fine \; sweep (Laplacian)}",
       marker=:square,
       linewidth=2)
@@ -105,10 +102,11 @@ savefig(joinpath(@__DIR__, "..", "data", "plots",
         "plot_Rmatch_N$(num_part)_nr0sq$(nr0_sq).pdf"))
 println("Saved R_match sweep plot to: ", joinpath("data", "plots", "plot_Rmatch_N$(num_part)_nr0sq$(nr0_sq).pdf"))
 
-# # ------------------------------------------
-# # Plot 2: VMC energy vs paper
-# # ------------------------------------------
-# # Paper fit: E/N = a1*(nr0^2)^(3/2) + a2*(nr0^2)^(5/4) + a3*(nr0^2)^(1/2)
+# ------------------------------------------
+# Plot 2: VMC energy vs paper
+# ------------------------------------------
+# Paper fit: E/N = a1*(nr0^2)^(3/2) + a2*(nr0^2)^(5/4) + a3*(nr0^2)^(1/2)
+
 # a1, a2, a3 = 4.536, 4.38, 1.2  # gas phase coefficients from Astrakharchik 2007
 # nr0_range  = collect(LinRange(1.0, 300.0, 500))
 # E_paper    = @. a1*nr0_range^(3/2) + a2*nr0_range^(5/4) + a3*nr0_range^(1/2)

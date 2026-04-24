@@ -1,5 +1,4 @@
 # main.jl
-
 using Random, Bessels, Plots, LaTeXStrings, ProgressMeter, Base.Threads, DelimitedFiles
 
 # Source files
@@ -12,28 +11,36 @@ include(normpath(joinpath(@__DIR__, "src", "observables.jl")))
 
 # Parameters
 num_part             = 30
-nr0_sq               = 16.0
-L                    = sqrt(num_part / nr0_sq)
 num_steps_coarse     = 10^5
 num_steps_fine       = 10^6
-num_steps_production = 10^7
+num_steps_production = 10^6
 
+nr0_sq_values = [16.0, 32.0, 48.0, 64.0, 96.0, 128.0, 196.0, 256.0, 384.0, 512.0, 768.0, 1024.0]
+
+global nr0_sq  # declare before the loop
+global L
+global R_opt   # any other variables used in the scripts
 
 println("Starting simulation...")
-println("N = $num_part, nr0^2 = $nr0_sq, L = $L")
+println("N = $num_part")
 
-@time begin
-    # First step: optimize R_match
-    println("\n=== Stage 1: R_match Optimization ===")
-    include(normpath(joinpath(@__DIR__, "scripts", "optimize_Rmatch.jl")))
+for nr0_sq_val in nr0_sq_values
+    global nr0_sq = nr0_sq_val
+    global L = sqrt(num_part / nr0_sq)
 
-    # Second step: production VMC run
-    println("\n=== Stage 2: Production VMC Run ===")
-    include(normpath(joinpath(@__DIR__, "scripts", "run_vmc.jl")))
+    println("\n========================================")
+    println("nr0^2 = $nr0_sq, L = $L")
+    println("========================================")
 
-    # Third step: plots
-    println("\n=== Stage 3: Generating Plots ===")
-    include(normpath(joinpath(@__DIR__, "scripts", "plot_results.jl")))
+    @time begin
+        println("\n=== Stage 1: R_match Optimization ===")
+        include(normpath(joinpath(@__DIR__, "scripts", "optimize_Rmatch.jl")))
+        println("\n=== Stage 2: Production VMC Run ===")
+        include(normpath(joinpath(@__DIR__, "scripts", "run_vmc.jl")))
+        println("\n=== Stage 3: Generating Plots ===")
+        include(normpath(joinpath(@__DIR__, "scripts", "plot_results.jl")))
+    end
+    println("Completed nr0^2 = $nr0_sq")
 end
 
-println("\nTotal simulation completed.")
+println("\nAll simulations completed.")
