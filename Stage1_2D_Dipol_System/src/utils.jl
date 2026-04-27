@@ -2,48 +2,46 @@ using Random
 
 """
     get_periodic_difference(x1::Float64, x2::Float64, L::Float64) -> Float64
-
 Computes the minimum-image (periodic) difference between two points in a 1D periodic box.
-
 # Input:
 - `x1::Float64`: Position of the first point.
 - `x2::Float64`: Position of the second point.
 - `L::Float64`: Length of the periodic box.
-
 # Output:
-- `Float64`: The difference `(x1 - x2)`, mapped to the interval [0, L].
-
-# Notes
-Useful for applying periodic boundary conditions and minimum-image convention in simulations.
+- `Float64`: The difference `(x1 - x2)`, mapped to the interval [-L/2, L/2).
 """
 function get_periodic_difference(x1::Float64, x2::Float64, L::Float64)::Float64
-    diff = x1 - x2
-    # Shift to [0, L), then to [-L/2, L/2]
-    return diff - L * round(diff / L)
+    return mod(x1 - x2 + L/2, L) - L/2
 end
 
 """
-    random_initial_config(num_part::Int, L::Float64) -> Matrix{Float64}
+    wrap_position(x::Float64, L::Float64) -> Float64
+Wraps a position back into the simulation box [0, L).
+# Input:
+- `x::Float64`: Position to wrap.
+- `L::Float64`: Length of the periodic box.
+# Output:
+- `Float64`: Position mapped to [0, L).
+"""
+function wrap_position(x::Float64, L::Float64)::Float64
+    return mod(x, L)
+end
 
-Generates a random initial configuration of `num_part` particles uniformly distributed in a 1D periodic box of length `L`.
-
+"""
+    random_initial_config(num_part::Int, L::Float64, distribution::AbstractString) -> Tuple
+Generates a random initial configuration of `num_part` particles in a 2D periodic box.
 # Input:
 - `num_part::Int`: Number of particles.
 - `L::Float64`: Length of the simulation box.
-
+- `distribution::AbstractString`: Type of distribution ("Uniform").
 # Output:
-- `Matrix{Float64}`: Positions of all particles, each in the interval [-L/2, L/2].
-
-# Notes
-Particle positions are initialized randomly and independently with uniform probability over the full simulation box.
+- `Tuple{Vector{Float64}, Vector{Float64}}`: x and y coordinates in [0, L).
 """
 function random_initial_config(num_part::Int, L::Float64, distribution::AbstractString)::Tuple{Vector{Float64}, Vector{Float64}}
     if distribution == "Uniform"
-        positions = L .* rand(2, num_part) .- L/2  # Random initial configuration in the range [-L/2, L/2]
+        positions = L .* rand(2, num_part)  # [0, L)
     else
         error("Unsupported distribution: $distribution")
     end
-
-    return positions[1, :], positions[2, :]  # Return x and y coordinates as separate vectors
-
+    return positions[1, :], positions[2, :]
 end

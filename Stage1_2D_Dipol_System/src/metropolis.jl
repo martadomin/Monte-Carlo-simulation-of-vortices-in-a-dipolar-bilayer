@@ -8,10 +8,12 @@ function move_one_part(x_coord::Vector{Float64}, y_coord::Vector{Float64}, delta
     x_coord_new = copy(x_coord)
     y_coord_new = copy(y_coord)
     id = rand(1:length(x_coord))
+    
     x_coord_new[id] += rand() * (2 * delta) - delta  # Displacement in [-delta, delta]
-    x_coord_new[id] = get_periodic_difference(x_coord_new[id], 0.0, L)  # Apply periodic boundary conditions
+    x_coord_new[id] = wrap_position(x_coord_new[id], L)  # Apply periodic boundary conditions
+
     y_coord_new[id] += rand() * (2 * delta) - delta  # Displacement in [-delta, delta]
-    y_coord_new[id] = get_periodic_difference(y_coord_new[id], 0.0, L)  # Apply periodic boundary conditions
+    y_coord_new[id] = wrap_position(y_coord_new[id], L)  # Apply periodic boundary conditions
     return id, x_coord_new, y_coord_new
 end
 

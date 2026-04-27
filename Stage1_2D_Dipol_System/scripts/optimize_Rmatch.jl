@@ -17,7 +17,7 @@ R_opt = results_fine.R_match_vals[argmin(results_fine.energies)]
 
 println("\n--- Results ---")
 println("Optimal R_match = $R_opt")
-println("Optimal energy per particle = ", minimum(results_fine.energies))
+println("Optimal energy per particle = ", minimum(results_fine.energies)/(num_part * nr0_sq^(3/2)))
 
 # Save results to file
 results_path = joinpath(@__DIR__, "..", "data", "sweep_results",

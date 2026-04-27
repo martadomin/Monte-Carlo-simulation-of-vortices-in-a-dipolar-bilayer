@@ -73,11 +73,9 @@ function sweep_Rmatch(L::Float64, num_part::Int, nr0_sq::Float64, R_match_vals::
         # avg_energy_drift, sigma_drift = blocking_statistics(energies_drift_vmc, plateau_drift)
         # avg_energy_laplacian, sigma_laplacian = blocking_statistics(energies_laplacian_vmc, plateau_laplacian)
 
-        nr0_sq_32 = num_part * nr0_sq^(3/2)
-
-        energies[idx] = E_tot/nr0_sq_32
-        energies_drift[idx] = E_drift/nr0_sq_32
-        energies_laplacian[idx] = E_laplacian/nr0_sq_32
+        energies[idx] = E_tot
+        energies_drift[idx] = E_drift
+        energies_laplacian[idx] = E_laplacian
         # error[idx] = sigma/nr0_sq_32
         # error_drift[idx] = sigma_drift/nr0_sq_32    
         # error_laplacian[idx] = sigma_laplacian/nr0_sq_32
