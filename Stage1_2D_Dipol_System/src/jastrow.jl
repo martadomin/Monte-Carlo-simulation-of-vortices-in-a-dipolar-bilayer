@@ -40,6 +40,8 @@ function u2(r::Float64, R_match::Float64, L::Float64, Constants::Tuple{Float64, 
         return 0.0
     end
 
+    if r>=L/2 return 0.0 end
+
     C1, C2, C3 = Constants
     if r < R_match
         return log(C1) + log(besselk(0, 2/sqrt(r)))
@@ -58,6 +60,8 @@ function u2_first_derivative(r::Float64, R_match::Float64, L::Float64, Constants
         return 0.0
     end
 
+    if r>=L/2 return 0.0 end
+
     _, _, C3 = Constants
     if r < R_match
         return besselk(1, 2/sqrt(r)) / besselk(0, 2/sqrt(r)) * r^(-3/2)
@@ -75,6 +79,8 @@ function u2_second_derivative(r::Float64, R_match::Float64, L::Float64, Constant
     if r < 1e-10
         return 0.0
     end
+
+    if r>=L/2 return 0.0 end
 
     _, _, C3 = Constants
     if r < R_match
