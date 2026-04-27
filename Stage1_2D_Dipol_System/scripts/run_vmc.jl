@@ -65,9 +65,9 @@ nr0_sq_32 = num_part * nr0_sq^(3/2)
 
 println("\n--- Results ---")
 println("E/N/(nr0^2)^(3/2) ± σ = ", avg_energy, " ± ", sigma)
-println("E_drift/N/(nr0^2)^(3/2) = ", avg_energy_drift)
-println("E_laplacian/N/(nr0^2)^(3/2) = ", avg_energy_laplacian)
-println("Acceptance ratio       = ", acceptance_ratio)
+println("E_drift/N/(nr0^2)^(3/2) ± σ = ", avg_energy_drift , " ± ", sigma_drift)
+println("E_laplacian/N/(nr0^2)^(3/2) ± σ = ", avg_energy_laplacian, " ± ", sigma_laplacian)
+println("Acceptance ratio = ", acceptance_ratio)
 
 # Save results
 results_path = joinpath(@__DIR__, "..", "data", "results",

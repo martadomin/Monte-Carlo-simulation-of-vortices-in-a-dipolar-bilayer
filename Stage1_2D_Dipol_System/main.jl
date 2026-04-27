@@ -12,12 +12,13 @@ include(normpath(joinpath(@__DIR__, "src", "observables.jl")))
 
 # Parameters
 num_part = 30
-# nr0_sq_vals = [16.0, 32.0, 48.0, 64.0, 96.0, 128.0, 196.0, 256.0, 384.0, 512.0, 768.0, 1024.0]
-nr0_sq_vals = [16.0]  # for testing´
+nr0_sq_vals = [16.0, 32.0, 48.0, 64.0, 96.0, 128.0, 196.0, 256.0, 384.0, 512.0, 768.0, 1024.0]
+# nr0_sq_vals = [16.0]  # for testing´
 
-num_steps_coarse = 10^5
-num_steps_fine = 10^6
+num_steps_coarse = 10^6
+num_steps_fine = 10^7
 num_steps_production = 10^7
+
 
 println("Starting simulation...")
 
@@ -32,9 +33,9 @@ for nr0_sq_val in nr0_sq_vals
         println("\n=== Stage 1: R_match Optimization ===")
         include(normpath(joinpath(@__DIR__, "scripts", "optimize_Rmatch.jl")))
 
-        # Second step: production VMC run
-        println("\n=== Stage 2: Production VMC Run ===")
-        include(normpath(joinpath(@__DIR__, "scripts", "run_vmc.jl")))
+        # # Second step: production VMC run
+        # println("\n=== Stage 2: Production VMC Run ===")
+        # include(normpath(joinpath(@__DIR__, "scripts", "run_vmc.jl")))
 
         # Third step: plots
         println("\n=== Stage 3: Generating Plots ===")

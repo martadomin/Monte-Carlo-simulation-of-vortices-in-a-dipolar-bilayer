@@ -24,14 +24,14 @@ results_path = joinpath(@__DIR__, "..", "data", "sweep_results",
                "Rmatch_sweep_N$(num_part)_nr0sq$(nr0_sq).txt")
 open(results_path, "w") do io
     println(io, "# Coarse sweep")
-    println(io, "R_match\tEnergy\tError\tDrift_Energy\tError_Drift\tLaplacian_Energy\tError_Laplacian")
-    for (r, e, error, error_drift, error_laplacian) in zip(results_coarse.R_match_vals, results_coarse.energies, results_coarse.error, results_coarse.error_drift, results_coarse.error_laplacian)
-        println(io, "$(r)\t$(e)\t$(error)\t$(error_drift)\t$(error_laplacian)")
+    println(io, "R_match\tEnergy\tError_Energy\tDrift_Energy\tError_Drift\tLaplacian_Energy\tError_Laplacian")
+    for (r, e, error, e_drift, error_drift, e_laplacian, error_laplacian) in zip(results_coarse.R_match_vals, results_coarse.energies, results_coarse.error, results_coarse.energies_drift, results_coarse.error_drift, results_coarse.energies_laplacian, results_coarse.error_laplacian)
+        println(io, "$(r)\t$(e)\t$(error)\t$(e_drift)\t$(error_drift)\t$(e_laplacian)\t$(error_laplacian)")
     end
     println(io, "\n# Fine sweep")
-    println(io, "R_match\tEnergy\tError\tDrift_Energy\tError_Drift\tLaplacian_Energy\tError_Laplacian")
-    for (r, e, error, error_drift, error_laplacian) in zip(results_fine.R_match_vals, results_fine.energies, results_fine.error, results_fine.error_drift, results_fine.error_laplacian)
-        println(io, "$(r)\t$(e)\t$(error)\t$(error_drift)\t$(error_laplacian)")
+    println(io, "R_match\tEnergy\tError_Energy\tDrift_Energy\tError_Drift\tLaplacian_Energy\tError_Laplacian")
+    for (r, e, error, e_drift, error_drift, e_laplacian, error_laplacian) in zip(results_fine.R_match_vals, results_fine.energies, results_fine.error, results_fine.energies_drift, results_fine.error_drift, results_fine.energies_laplacian, results_fine.error_laplacian)
+        println(io, "$(r)\t$(e)\t$(error)\t$(e_drift)\t$(error_drift)\t$(e_laplacian)\t$(error_laplacian)")
     end
     println(io, "\n# Optimal R_match")
     println(io, "R_opt\tE_opt")

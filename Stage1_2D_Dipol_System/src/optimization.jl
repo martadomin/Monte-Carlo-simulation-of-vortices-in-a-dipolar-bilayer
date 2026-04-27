@@ -85,9 +85,9 @@ function sweep_Rmatch(L::Float64, num_part::Int, nr0_sq::Float64, R_match_vals::
         energies_laplacian[idx] = E_laplacian
 
         # Store errors (normalized by density factor)
-        error[idx] = sigma / nr0_sq_32
-        error_drift[idx] = sigma_drift / nr0_sq_32
-        error_laplacian[idx] = sigma_laplacian / nr0_sq_32
+        error[idx] = sigma
+        error_drift[idx] = sigma_drift
+        error_laplacian[idx] = sigma_laplacian
     end
 
     return (R_match_vals=R_match_vals, energies=energies, energies_drift=energies_drift, energies_laplacian=energies_laplacian, error=error, error_drift=error_drift, error_laplacian=error_laplacian)
