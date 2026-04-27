@@ -19,7 +19,6 @@ num_steps_coarse = 10^5
 num_steps_fine = 10^6
 num_steps_production = 10^7
 
-
 println("Starting simulation...")
 
 for nr0_sq_val in nr0_sq_vals

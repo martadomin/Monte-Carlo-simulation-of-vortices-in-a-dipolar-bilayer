@@ -73,17 +73,22 @@ function sweep_Rmatch(L::Float64, num_part::Int, nr0_sq::Float64, R_match_vals::
         # avg_energy_drift, sigma_drift = blocking_statistics(energies_drift_vmc, plateau_drift)
         # avg_energy_laplacian, sigma_laplacian = blocking_statistics(energies_laplacian_vmc, plateau_laplacian)
 
+        # Apply assumed block sizes for error estimation
+        # B_std = 400, B_drift = 800, B_laplacian = 1000 are chosen based on previous runs and may be adjusted as needed using the code above for manual selection
+        _, sigma = blocking_statistics(energies_vmc, 400)
+        _, sigma_drift = blocking_statistics(energies_drift_vmc, 1000)
+        _, sigma_laplacian = blocking_statistics(energies_laplacian_vmc, 800)
+
+        # Store averages (normalized by density factor if needed by your plotting script)
         energies[idx] = E_tot
         energies_drift[idx] = E_drift
         energies_laplacian[idx] = E_laplacian
-        # error[idx] = sigma/nr0_sq_32
-        # error_drift[idx] = sigma_drift/nr0_sq_32    
-        # error_laplacian[idx] = sigma_laplacian/nr0_sq_32
 
-        # println("E/N = $(energies[idx]) ± $(error[idx])")
-        # println("E_drift/N = $(energies_drift[idx]) ± $(error_drift[idx])")
-        # println("R_match = $(round(R_match, digits=3)), E/N = $(energies_vmc[idx]), E_drift/N = $(energies_drift_vmc[idx])")
+        # Store errors (normalized by density factor)
+        error[idx] = sigma / nr0_sq_32
+        error_drift[idx] = sigma_drift / nr0_sq_32
+        error_laplacian[idx] = sigma_laplacian / nr0_sq_32
     end
 
-    return (R_match_vals=R_match_vals, energies=energies, energies_drift=energies_drift, energies_laplacian=energies_laplacian)
+    return (R_match_vals=R_match_vals, energies=energies, energies_drift=energies_drift, energies_laplacian=energies_laplacian, error=error, error_drift=error_drift, error_laplacian=error_laplacian)
 end
