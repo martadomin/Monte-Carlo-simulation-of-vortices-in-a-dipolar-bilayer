@@ -29,13 +29,13 @@ for nr0_sq_val in nr0_sq_vals
 
     println("\n=== Simulation for N = $num_part, nr0^2 = $nr0_sq, L = $L ===")
     @time begin
-        # First step: optimize R_match
-        println("\n=== Stage 1: R_match Optimization ===")
-        include(normpath(joinpath(@__DIR__, "scripts", "optimize_Rmatch.jl")))
+        # # First step: optimize R_match
+        # println("\n=== Stage 1: R_match Optimization ===")
+        # include(normpath(joinpath(@__DIR__, "scripts", "optimize_Rmatch.jl")))
 
-        # # Second step: production VMC run
-        # println("\n=== Stage 2: Production VMC Run ===")
-        # include(normpath(joinpath(@__DIR__, "scripts", "run_vmc.jl")))
+        # Second step: production VMC run
+        println("\n=== Stage 2: Production VMC Run ===")
+        include(normpath(joinpath(@__DIR__, "scripts", "run_vmc.jl")))
 
         # Third step: plots
         println("\n=== Stage 3: Generating Plots ===")

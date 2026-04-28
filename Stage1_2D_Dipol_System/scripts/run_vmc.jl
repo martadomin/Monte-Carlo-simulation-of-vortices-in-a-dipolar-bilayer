@@ -1,6 +1,27 @@
 # scripts/run_vmc.jl
 # Expects from main.jl: num_part, nr0_sq, L, R_opt, num_steps_production
 
+using Plots, LaTeXStrings
+
+# Read R_opt from sweep file
+rmatch_path = joinpath(@__DIR__, "..", "data", "sweep_results",
+              "Rmatch_sweep_N$(num_part)_nr0sq$(nr0_sq).txt")
+
+R_opt = 0.0
+open(rmatch_path, "r") do io
+    section = ""
+    for line in eachline(io)
+        startswith(line, "#") && (section = line; continue)
+        isempty(strip(line)) && continue
+        line == "R_opt\tE_opt" && continue
+        if occursin("Optimal", section)
+            vals = parse.(Float64, split(line, "\t"))
+            R_opt = vals[1]
+        end
+    end
+end
+println("Loaded R_opt = $R_opt from sweep file")
+
 println("Number of particles: ", num_part)
 println("Density nr0^2 = ", nr0_sq)
 println("L = ", L)
