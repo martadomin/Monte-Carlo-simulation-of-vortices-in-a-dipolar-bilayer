@@ -6,13 +6,13 @@ E_vmc = Float64[]
 error_E_vmc = Float64[]
 
 for nr0_sq in nr0_sq_sim
-
-    vmc_path = joinpath(@__DIR__, "..", "data", "results",
-               "vmc_N$(num_part)_nr0sq$(nr0_sq).txt")
-    vmc_data = readdlm(vmc_path, '\t', Float64, skipstart=1)
-    nr0_sq_32 = num_part * nr0_sq^(3/2)
-    push!(E_vmc, vmc_data[1, 5] / nr0_sq_32)        
-    push!(error_E_vmc, vmc_data[1, 6] / nr0_sq_32) 
+        E_tail = @. π * sqrt(nr0_sq) / sqrt(num_part)
+        vmc_path = joinpath(@__DIR__, "..", "data", "results",
+                "vmc_N$(num_part)_nr0sq$(nr0_sq).txt")
+        vmc_data = readdlm(vmc_path, '\t', Float64, skipstart=1)
+        nr0_sq_32 = num_part * nr0_sq^(3/2)
+        push!(E_vmc, vmc_data[1, 5] / nr0_sq_32 + E_tail)        
+        push!(error_E_vmc, vmc_data[1, 6] / nr0_sq_32) 
 end
 
 # Paper fit: E/N = a1*(nr0^2)^(3/2) + a2*(nr0^2)^(5/4) + a3*(nr0^2)^(1/2)
