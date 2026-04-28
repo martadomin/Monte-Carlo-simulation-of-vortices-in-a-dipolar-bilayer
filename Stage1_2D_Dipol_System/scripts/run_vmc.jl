@@ -7,20 +7,21 @@ using Plots, LaTeXStrings
 rmatch_path = joinpath(@__DIR__, "..", "data", "sweep_results",
               "Rmatch_sweep_N$(num_part)_nr0sq$(nr0_sq).txt")
 
-R_opt = 0.0
+R_opt_ref = Ref(0.0)
 open(rmatch_path, "r") do io
     section = ""
     for line in eachline(io)
         startswith(line, "#") && (section = line; continue)
         isempty(strip(line)) && continue
         line == "R_opt\tE_opt" && continue
-        if occursin("Optimal", section)
+        if occursin("Optimal R_match", section)
             vals = parse.(Float64, split(line, "\t"))
-            R_opt = vals[1]
+            R_opt_ref[] = vals[1]
         end
     end
 end
-println("Loaded R_opt = $R_opt from sweep file")
+R_opt = R_opt_ref[]
+println("Loaded R_opt = $(R_opt) from sweep file")
 
 println("Number of particles: ", num_part)
 println("Density nr0^2 = ", nr0_sq)
@@ -55,22 +56,24 @@ for B in block_sizes
     push!(sigmas_laplacian, sigma_laplacian)
 end
 
-# Show plot and ask for plateau block size
 p = plot(block_sizes, sigmas,
         marker=:circle,
         xlabel="Block size",
         ylabel="Standard error",
-        title="Blocking analysis, R_match = $(round(R_match, digits=3))",
+        title="Blocking analysis, R_opt = $(round(R_opt, digits=4))",
         linewidth=2,
-        xticks = block_sizes,
-        xrotation=45)
-
+        xticks=block_sizes,
+        xrotation=45,
+        label="Standard")
 plot!(block_sizes, sigmas_drift,
-    marker=:square,
-    linewidth=2)
+      marker=:square, linewidth=2, label="Drift")
+plot!(block_sizes, sigmas_laplacian,
+      marker=:diamond, linewidth=2, label="Laplacian")
+
 display(p)
 
-println("\nR_match = $(round(R_match, digits=3))")
+println("\nR_opt = $(round(R_opt, digits=4))")
+
 println("Enter plateau block size for standard estimator: ")
 plateau_std = parse(Int, readline())
 println("Enter plateau block size for drift estimator: ")

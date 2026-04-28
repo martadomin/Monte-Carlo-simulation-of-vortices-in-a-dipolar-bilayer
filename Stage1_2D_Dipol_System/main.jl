@@ -12,8 +12,8 @@ include(normpath(joinpath(@__DIR__, "src", "observables.jl")))
 
 # Parameters
 num_part = 30
-nr0_sq_vals = [16.0, 32.0, 48.0, 64.0, 96.0, 128.0, 196.0, 256.0, 384.0, 512.0, 768.0, 1024.0]
-# nr0_sq_vals = [16.0]  # for testing´
+nr0_sq_vals = [1024.0]  # main values for production runs
+# nr0_sq_vals = [512.0, 768.0, 1024.0]  # for testing´
 
 num_steps_coarse = 10^6
 num_steps_fine = 10^7
