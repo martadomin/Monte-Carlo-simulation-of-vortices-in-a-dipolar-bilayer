@@ -24,11 +24,15 @@ function sweep_Rmatch(L::Float64, num_part::Int, nr0_sq::Float64, R_match_vals::
         block_size = 100
         delta, x_init, y_init = tune_delta(x_coord, y_coord, L, R_match, Constants; target_ratio,
                                             num_tune_steps, block_size)
-        energies_vmc, energies_drift_vmc, energies_laplacian_vmc, E_tot, _, E_drift, E_laplacian,E_kin, E_int = metropolis(num_part, num_steps, delta, L, R_match, Constants;
-                                                                                                    x_init=x_init, y_init=y_init,
-                                                                                                    final_energy_plot=false,
-                                                                                                    plot_every=10^2,
-                                                                                                    progress=false)
+        energies_vmc, energies_drift_vmc, energies_laplacian_vmc, E_tot, _, E_drift, E_laplacian,E_kin, E_int, _, _ = metropolis(num_part,
+                                                                                                                                num_steps,
+                                                                                                                                num_bins=100,
+                                                                                                                                delta, L, R_match,
+                                                                                                                                Constants;
+                                                                                                                                x_init=x_init, y_init=y_init,
+                                                                                                                                final_energy_plot=false,
+                                                                                                                                plot_every=10^2,
+                                                                                                                                progress=false)
         # # Block averaging to get final energy estimates
         # block_sizes = [10, 20, 30, 40, 50, 100, 150, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1500, 1600, 1700, 1800, 1900, 2000]
         # sigmas = Float64[]

@@ -36,6 +36,7 @@ open(results_path, "w") do io
     println(io, "\n# Optimal R_match")
     println(io, "R_opt\tE_opt")
     println(io, "$(R_opt)\t$(minimum(results_fine.energies))")
+
 end
 println("Saved sweep results to: ", results_path)
 

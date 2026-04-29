@@ -132,8 +132,9 @@ function metropolis(
     y_init::Union{Vector{Float64}, Nothing} = nothing,
     final_energy_plot::Bool = false,
     plot_every::Int = 100,
-    progress::Bool = true
-    )::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Float64, Float64, Float64, Float64, Float64, Float64, Float64}
+    progress::Bool = true,
+    num_bins::Int = 100
+    )::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Vector{Float64}, Vector{Float64}}
 
     acceptance_ratio = 0.0
     n_uncorr = 0
@@ -151,6 +152,8 @@ function metropolis(
     energy_plot_1 = Float64[]
     energy_plot_2 = Float64[]
     step_plot = Int[]
+    g_r = zeros(Float64, num_bins)
+    n_gr_samples = 0 
     
     if x_init === nothing || y_init === nothing
         x_coord, y_coord = random_initial_config(num_part, L, "Uniform")
@@ -204,6 +207,9 @@ function metropolis(
                 push!(energy_plot_2, E_local / num_part)
 
             end
+
+            accumulate_gr!(g_r, x_coord, y_coord, L)
+            n_gr_samples += 1
         end
     end
 
@@ -226,6 +232,12 @@ function metropolis(
     end
 
     println("Acceptance ratio: ", acceptance_ratio / num_steps)
+    println("num_bins = ", num_bins)
+    println("length(g_r) = ", length(g_r))
+
+    r_vals, g_r_normalized = normalize_gr(g_r, num_part, L, n_gr_samples)
+    println("length(r_vals) = ", length(r_vals))
+    println("length(g_r_normalized) = ", length(g_r_normalized))
 
     return energies,
             energies_drift,
@@ -236,5 +248,7 @@ function metropolis(
             E_tot_laplacian / n_uncorr,
             E_kin / n_uncorr,
             E_int / n_uncorr,
-            acceptance_ratio / num_steps
+            acceptance_ratio / num_steps,
+            r_vals, 
+            g_r_normalized
 end
