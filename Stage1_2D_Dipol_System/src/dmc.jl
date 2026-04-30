@@ -55,10 +55,10 @@ function population_control(num_walkers::Int, num_target::Int, average_gs_E::Flo
     return average_gs_E - (1 / Δτ) * log(num_walkers / num_target)
 end
 
-function dmc(num_walkers::Int, num_steps::Int, Δτ::Float64, L::Float64, R_match::Float64, Constants::Tuple{Float64, Float64, Float64}, E_ref_initial::Float64)
+function dmc(num_walkers::Int, num_steps::Int, Δτ::Float64, L::Float64, R_match::Float64, Constants::Tuple{Float64, Float64, Float64}, E_ref_initial::Float64, D::Float64, num_target::Int)
     # Initialize walkers
-    x_walkers = [L .* rand(length(Constants)) for _ in 1:num_walkers]
-    y_walkers = [L .* rand(length(Constants)) for _ in 1:num_walkers]
+    x_walkers = [L .* rand(num_walkers) for _ in 1:num_walkers]
+    y_walkers = [L .* rand(num_walkers) for _ in 1:num_walkers]
     weights = ones(num_walkers)
     E_ref = E_ref_initial
     E = 0.0
@@ -97,8 +97,11 @@ function dmc(num_walkers::Int, num_steps::Int, Δτ::Float64, L::Float64, R_matc
         
         # Population control
         if length(x_walkers) > 0
-            E_ref = population_control(num_walkers, num_target=1000, average_gs_E=E/step, Δτ)
+            E_ref = population_control(length(x_walkers), num_target, E/step, Δτ)
         else
             println("All walkers died at step $step")
             break
         end
+    end
+end
+

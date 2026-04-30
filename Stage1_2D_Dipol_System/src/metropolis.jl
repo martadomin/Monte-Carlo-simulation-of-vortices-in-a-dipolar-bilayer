@@ -154,6 +154,11 @@ function metropolis(
     step_plot = Int[]
     g_r = zeros(Float64, num_bins)
     n_gr_samples = 0 
+    E_local = NaN
+    E_local_drift = NaN
+    E_local_laplacian = NaN
+    E_kinetic = NaN
+    E_potential = NaN
     
     if x_init === nothing || y_init === nothing
         x_coord, y_coord = random_initial_config(num_part, L, "Uniform")
@@ -161,6 +166,8 @@ function metropolis(
         x_coord = copy(x_init)
         y_coord = copy(y_init)
     end
+
+    E_local, E_local_drift, E_local_laplacian, E_kinetic, E_potential = local_energy(x_coord, y_coord, L, R_match, Constants)
     
     if progress == true
         progress_bar = Progress(num_steps; desc="Running Metropolis $num_part...", showspeed=true)
@@ -179,10 +186,11 @@ function metropolis(
             x_coord = x_new
             y_coord = y_new
             acceptance_ratio += 1
-        end
-        
-        if i % step_block == 0
+
             E_local, E_local_drift, E_local_laplacian, E_kinetic, E_potential = local_energy(x_coord, y_coord, L, R_match, Constants)
+        end
+
+        if i % step_block == 0
             push!(energies, E_local)
             push!(energies_drift, E_local_drift)
             push!(energies_laplacian, E_local_laplacian)
@@ -224,20 +232,16 @@ function metropolis(
         lw=2,
         )
         display(energy_plot)
-        # Si ejecutas desde terminal, esto evita que el script termine y cierre el plot
-        println("\n>>> Gráfico de energía generado. Presiona ENTER para continuar...")
+        println("\n>>> Energy Graph created. Press ENTER to continue...")
         if !isinteractive() # Solo bloquea si no estás en un REPL interactivo
             readline()
         end
     end
 
     println("Acceptance ratio: ", acceptance_ratio / num_steps)
-    println("num_bins = ", num_bins)
-    println("length(g_r) = ", length(g_r))
 
     r_vals, g_r_normalized = normalize_gr(g_r, num_part, L, n_gr_samples)
-    println("length(r_vals) = ", length(r_vals))
-    println("length(g_r_normalized) = ", length(g_r_normalized))
+
 
     return energies,
             energies_drift,

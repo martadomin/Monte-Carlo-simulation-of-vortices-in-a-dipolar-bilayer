@@ -26,7 +26,12 @@ function local_interaction_energy(x_coord::Vector{Float64}, y_coord::Vector{Floa
         @inbounds for j in (i + 1):num_part
             dx = get_periodic_difference(x_coord[i], x_coord[j], L)
             dy = get_periodic_difference(y_coord[i], y_coord[j], L)
-            E_int += (dx^2 + dy^2)^(-3/2)
+            r = sqrt(dx^2 + dy^2)
+            if r > L/2
+                E_int += (dx^2 + dy^2)^(-3/2)
+            else
+                E_int += (dx^2 + dy^2)^(-3/2)
+            end
         end
     end
     return E_int

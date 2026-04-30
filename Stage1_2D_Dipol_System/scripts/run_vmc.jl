@@ -50,40 +50,43 @@ block_sizes = [10, 20, 30, 40, 50, 100, 150, 200, 300, 400, 500, 600, 700, 800, 
 sigmas = Float64[]
 sigmas_drift = Float64[]
 sigmas_laplacian = Float64[]
-for B in block_sizes
-    _, sigma = blocking_statistics(energies_vmc, B)
-    _, sigma_drift = blocking_statistics(energies_drift_vmc, B)
-    _, sigma_laplacian = blocking_statistics(energies_laplacian_vmc, B)
-    push!(sigmas, sigma)
-    push!(sigmas_drift, sigma_drift)
-    push!(sigmas_laplacian, sigma_laplacian)
-end
+# for B in block_sizes
+#     _, sigma = blocking_statistics(energies_vmc, B)
+#     _, sigma_drift = blocking_statistics(energies_drift_vmc, B)
+#     _, sigma_laplacian = blocking_statistics(energies_laplacian_vmc, B)
+#     push!(sigmas, sigma)
+#     push!(sigmas_drift, sigma_drift)
+#     push!(sigmas_laplacian, sigma_laplacian)
+# end
 
-p = plot(block_sizes, sigmas,
-        marker=:circle,
-        xlabel="Block size",
-        ylabel="Standard error",
-        title="Blocking analysis, R_opt = $(round(R_opt, digits=4))",
-        linewidth=2,
-        xticks=block_sizes,
-        xrotation=45,
-        label="Standard")
-plot!(block_sizes, sigmas_drift,
-      marker=:square, linewidth=2, label="Drift")
-plot!(block_sizes, sigmas_laplacian,
-      marker=:diamond, linewidth=2, label="Laplacian")
+# p = plot(block_sizes, sigmas,
+#         marker=:circle,
+#         xlabel="Block size",
+#         ylabel="Standard error",
+#         title="Blocking analysis, R_opt = $(round(R_opt, digits=4))",
+#         linewidth=2,
+#         xticks=block_sizes,
+#         xrotation=45,
+#         label="Standard")
+# plot!(block_sizes, sigmas_drift,
+#       marker=:square, linewidth=2, label="Drift")
+# plot!(block_sizes, sigmas_laplacian,
+#       marker=:diamond, linewidth=2, label="Laplacian")
 
-display(p)
+# display(p)
 
-println("\nR_opt = $(round(R_opt, digits=4))")
+# println("\nR_opt = $(round(R_opt, digits=4))")
 
-println("Enter plateau block size for standard estimator: ")
-plateau_std = parse(Int, readline())
-println("Enter plateau block size for drift estimator: ")
-plateau_drift = parse(Int, readline())
-println("Enter plateau block size for laplacian estimator: ")
-plateau_laplacian = parse(Int, readline())
+# println("Enter plateau block size for standard estimator: ")
+# plateau_std = parse(Int, readline())
+# println("Enter plateau block size for drift estimator: ")
+# plateau_drift = parse(Int, readline())
+# println("Enter plateau block size for laplacian estimator: ")
+# plateau_laplacian = parse(Int, readline())
 
+plateau_std = 500
+plateau_drift = 800
+plateau_laplacian = 1000
 
 # Get error at chosen block size
 avg_energy, sigma = blocking_statistics(energies_vmc, plateau_std)
@@ -116,9 +119,3 @@ open(gr_path, "w") do io
         println(io, "$(r)\t$(g)")
     end
 end
-println("length(r_vals) = ", length(r_vals))
-println("length(g_r_normalized) = ", length(g_r_normalized))
-println("Non-zero bins: ", sum(g_r_normalized .> 0))
-println("First few g(r): ", g_r_normalized[1:5])
-
-println("Saved g(r) to: ", gr_path)

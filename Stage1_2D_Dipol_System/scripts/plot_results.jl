@@ -8,7 +8,6 @@ num_part = 30
 nr0_sq = 16.0
 
 L = sqrt(num_part / nr0_sq)
-
 nr0_sq_32 = num_part * nr0_sq^(3/2)
 
 println("Reading results for N = $num_part, nr0^2 = $nr0_sq")
@@ -79,7 +78,7 @@ col_lap = "#d95f02"
 
 p1 = plot(
     xlabel  = L"R_{\mathrm{match}}",
-    ylabel  = L"E/N \cdot (nr_0^2)^{-3/2}",
+    ylabel  = L"(E/N) \cdot (nr_0^2)^{-3/2}",
     title   = L"R_{\mathrm{match}}\ \mathrm{Optimization},\ nr_0^2 = %$(Int(nr0_sq)),\ N = %$(num_part)",
     legend  = :topright,
     dpi = 600

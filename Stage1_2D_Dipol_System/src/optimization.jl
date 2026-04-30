@@ -32,7 +32,8 @@ function sweep_Rmatch(L::Float64, num_part::Int, nr0_sq::Float64, R_match_vals::
                                                                                                                                 x_init=x_init, y_init=y_init,
                                                                                                                                 final_energy_plot=false,
                                                                                                                                 plot_every=10^2,
-                                                                                                                                progress=false)
+                                                                                                                                progress=true)
+                                                                                                                                
         # # Block averaging to get final energy estimates
         # block_sizes = [10, 20, 30, 40, 50, 100, 150, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1500, 1600, 1700, 1800, 1900, 2000]
         # sigmas = Float64[]

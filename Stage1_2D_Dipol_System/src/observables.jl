@@ -36,6 +36,5 @@ function normalize_gr(gr_histogram::Vector{Float64}, num_part::Int,
     r_vals = [(i - 0.5) * dr for i in 1:num_bins]
     gr = [gr_histogram[i] / (n_samples * num_part * n * 2π * r_vals[i] * dr)
           for i in 1:num_bins]
-
     return r_vals, gr
 end
