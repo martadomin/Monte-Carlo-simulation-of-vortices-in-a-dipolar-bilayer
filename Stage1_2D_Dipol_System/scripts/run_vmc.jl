@@ -60,41 +60,25 @@ for B in block_sizes
     push!(sigmas_laplacian, sigma_laplacian)
 end
 
-p = plot(block_sizes, sigmas,
-        marker=:circle,
-        xlabel="Block size",
-        ylabel="Standard error",
-        title="Blocking analysis, R_opt = $(round(R_opt, digits=4))",
-        linewidth=2,
-        xticks=block_sizes,
-        xrotation=45,
-        label="Standard")
-plot!(block_sizes, sigmas_drift,
-      marker=:square, linewidth=2, label="Drift")
-plot!(block_sizes, sigmas_laplacian,
-      marker=:diamond, linewidth=2, label="Laplacian")
-
-display(p)
-
 println("\nR_opt = $(round(R_opt, digits=4))")
 
-println("Enter plateau block size for standard estimator: ")
-plateau_std = parse(Int, readline())
-println("Enter plateau block size for drift estimator: ")
-plateau_drift = parse(Int, readline())
-println("Enter plateau block size for laplacian estimator: ")
-plateau_laplacian = parse(Int, readline())
+# --- AUTOMATED PLATEAU DETECTION ---
+println("\n--- Automating Plateau Detection ---")
 
-# plateau_std = 500
-# plateau_drift = 800
-# plateau_laplacian = 1000
+plateau_std = detect_plateau(block_sizes, sigmas, window_size=4, rtol=0.05)
+println("Detected plateau block size for standard estimator: ", plateau_std)
+
+plateau_drift = detect_plateau(block_sizes, sigmas_drift, window_size=4, rtol=0.05)
+println("Detected plateau block size for drift estimator:    ", plateau_drift)
+
+plateau_laplacian = detect_plateau(block_sizes, sigmas_laplacian, window_size=4, rtol=0.05)
+println("Detected plateau block size for laplacian estimator:", plateau_laplacian)
+# -----------------------------------
 
 # Get error at chosen block size
 avg_energy, sigma = blocking_statistics(energies_vmc, plateau_std)
 avg_energy_drift, sigma_drift = blocking_statistics(energies_drift_vmc, plateau_drift)
 avg_energy_laplacian, sigma_laplacian = blocking_statistics(energies_laplacian_vmc, plateau_laplacian)
-
-nr0_sq_32 = num_part * nr0_sq^(3/2)
 
 println("\n--- Results ---")
 println("E/N/(nr0^2)^(3/2) ± σ = ", avg_energy/nr0_sq_32, " ± ", sigma/nr0_sq_32)

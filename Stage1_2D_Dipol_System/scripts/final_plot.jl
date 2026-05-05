@@ -1,10 +1,14 @@
-using DelimitedFiles, Plots, LaTeXStrings
+ENV["PATH"] = "C:\\Users\\marta\\AppData\\Local\\Programs\\MiKTeX\\miktex\\bin\\x64;" * ENV["PATH"]
+using DelimitedFiles, Plots, LaTeXStrings, PGFPlotsX
 
 E_vmc = Float64[]
 error_E_vmc = Float64[]
+nr0_sq_vals = [16.0, 32.0, 64.0, 96.0, 128.0, 196.0, 256.0, 384.0, 512.0, 1024.0]
+num_part = 30
+L = sqrt.(num_part ./ nr0_sq_vals)
 
-for nr0_sq in nr0_sq_sim
-        vmc_path = joinpath(@__DIR__, "..", "data", "results",
+for nr0_sq in nr0_sq_vals
+        vmc_path = joinpath(@__DIR__, "..", "data", "results", "VMC",
                 "vmc_N$(num_part)_nr0sq$(nr0_sq).txt")
         vmc_data = readdlm(vmc_path, '\t', Float64, skipstart=1)
         nr0_sq_32 = num_part * nr0_sq^(3/2)
@@ -19,8 +23,8 @@ E_paper    = @. a1*nr0_range^(3/2) + a2*nr0_range^(5/4) + a3*nr0_range^(1/2)
 E_paper_normalized = E_paper ./ nr0_range.^(3/2)
 E_tail = 2 * π / sqrt(num_part)
 
-# pgfplotsx()
-gr()
+pgfplotsx()
+# gr()
 
 xticks_vals = [0.0, 250.0, 500.0, 750.0, 1000.0]
 xticks_labels = [L"0", L"250", L"500", L"750", L"1000"]
@@ -39,7 +43,7 @@ p2 = plot(nr0_range, E_paper_normalized,
           xticks=(xticks_vals, xticks_labels),
           yticks=(yticks_vals, yticks_labels))
 
-scatter!(nr0_sq_sim, E_vmc .+ E_tail,
+scatter!(nr0_sq_vals, E_vmc .+ E_tail,
          yerror=error_E_vmc,
          label=L"\mathrm{VMC,\ }N = %$(num_part)",
          marker=:circle,

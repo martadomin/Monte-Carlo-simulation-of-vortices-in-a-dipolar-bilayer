@@ -23,11 +23,14 @@ function drift_step(x_coord::Vector{Float64}, y_coord::Vector{Float64}, Δτ::Fl
                 dx = get_periodic_difference(x_coord[i], x_coord[j], L)
                 dy = get_periodic_difference(y_coord[i], y_coord[j], L)
                 r_ij = sqrt(dx^2 + dy^2)
-                du_dr = u2_first_derivative(r_ij, R_match, L, Constants)
-                drift_x +=  du_dr * (dx / r_ij)
-                drift_y +=  du_dr * (dy / r_ij)
+                if r_ij > 1e-10
+                    du_dr = u2_first_derivative(r_ij, R_match, L, Constants)
+                    drift_x +=  du_dr * (dx / r_ij)
+                    drift_y +=  du_dr * (dy / r_ij)
+                end
             end
         end
+
         x_drifted[i] += drift_x * Δτ
         y_drifted[i] += drift_y * Δτ
         
@@ -39,8 +42,8 @@ function drift_step(x_coord::Vector{Float64}, y_coord::Vector{Float64}, Δτ::Fl
     return x_drifted, y_drifted
 end
 
-function weight_update(E_loc::Float64, E_ref::Float64, Δτ::Float64)::Float64
-    return exp(- Δτ * (E_loc - E_ref))
+function weight_update(E_loc_old::Float64, E_loc_new::Float64, E_ref::Float64, Δτ::Float64)::Float64
+    return exp(- Δτ * (0.5*(E_loc_old + E_loc_new) - E_ref))
 end
 
 function branching_step(weights::Vector{Float64})::Vector{Int}
@@ -67,42 +70,61 @@ function dmc(x_init::Vector{Float64}, y_init::Vector{Float64},
     weights   = ones(Float64, num_walkers)
     E_ref     = E_ref_initial
     E_history = Float64[]
+    E_plot = Float64[]
+
+    E_loc_old = Vector{Float64}(undef, num_walkers)
+    @threads for i in 1:length(x_walkers)
+        E_loc_old[i], _, _, _, _ = local_energy(x_walkers[i], y_walkers[i], L, R_match, Constants)
+    end
 
     prog = Progress(num_steps; desc="Running DMC...", showspeed=true)
     for step in 1:num_steps
 
-        new_x_diff = Vector{Vector{Float64}}(undef, length(x_walkers))
-        new_y_diff = Vector{Vector{Float64}}(undef, length(y_walkers))
+        new_x = Vector{Vector{Float64}}(undef, length(x_walkers))
+        new_y = Vector{Vector{Float64}}(undef, length(y_walkers))
         next!(prog)
-        # 1. Diffusion + drift
+        # 1. Drift Δt/2 at old positions
         @threads for i in 1:length(x_walkers)
-            x_diff, y_diff = diffusion_step(x_walkers[i], y_walkers[i], L, D, Δτ)
-            new_x_diff[i], new_y_diff[i] = drift_step(x_diff, y_diff, Δτ, L, R_match, Constants)
+            new_x[i], new_y[i] = drift_step(x_walkers[i], y_walkers[i], Δτ/2, L, R_match, Constants)
         end
 
-        x_walkers = new_x_diff
-        y_walkers = new_y_diff
-
-        # 2. Local energies and weights
-        E_loc_all = Vector{Float64}(undef, length(x_walkers))
-        @threads for i in 1:length(x_walkers)
-            E_loc_all[i], _, _, _, _ = local_energy(x_walkers[i], y_walkers[i], L, R_match, Constants)
+        # 2. Diffusion Δt at drifted positions
+        @threads for i in 1:length(new_x)
+            new_x[i], new_y[i] = diffusion_step(new_x[i], new_y[i], L, D, Δτ)
         end
 
+        # 3. Drift Δt/2 at new positions
+        @threads for i in 1:length(x_walkers)
+            new_x[i], new_y[i] = drift_step(new_x[i], new_y[i], Δτ/2, L, R_match, Constants)
+        end
+
+        x_walkers = new_x
+        y_walkers = new_y
+
+        # 4. Local energies and weights
+        E_loc_new = Vector{Float64}(undef, length(x_walkers))
+        @threads for i in 1:length(x_walkers)
+            E_loc_new[i], _, _, _, _ = local_energy(x_walkers[i], y_walkers[i], L, R_match, Constants)
+        end
+
+        # 5. Branching weights update
         for i in 1:length(x_walkers)
-            weights[i] *= weight_update(E_loc_all[i], E_ref, Δτ)
+            weights[i] *= weight_update(E_loc_old[i], E_loc_new[i], E_ref, Δτ)
         end
 
-        avg_E = mean(E_loc_all)
+        avg_E = mean(E_loc_new)
 
-        # 3. Branching
+        # 6. Branching
         num_copies = branching_step(weights)
-        new_x = Vector{Vector{Float64}}()
-        new_y = Vector{Vector{Float64}}()
+
+        num_copies = branching_step(weights)
+        new_x, new_y = Vector{Vector{Float64}}(), Vector{Vector{Float64}}()
+        E_loc_old = Float64[]
         for i in 1:length(x_walkers)
             for _ in 1:num_copies[i]
                 push!(new_x, copy(x_walkers[i]))
                 push!(new_y, copy(y_walkers[i]))
+                push!(E_loc_old, E_loc_new[i])  # carry forward with walker
             end
         end
 
@@ -115,18 +137,25 @@ function dmc(x_init::Vector{Float64}, y_init::Vector{Float64},
             break
         end
 
-        # 4. Population control
+        # 7. Population control
         E_ref = population_control(length(x_walkers), num_target, avg_E, Δτ)
 
-        # 5. Accumulate after equilibration
+        # 8. Accumulate after equilibration
         if step > num_equil
             push!(E_history, avg_E)
+        end
+
+        E_plot = push!(E_plot, avg_E)
+
+        if step % 10000 == 0
+            println("\nCheckpoint at step $step: Walkers = $(length(x_walkers)), Avg E_loc = $avg_E, E_ref = $E_ref")
+            println("num_copies stats: min=$(minimum(num_copies)), max=$(maximum(num_copies)), mean=$(mean(num_copies))")
         end
 
     end
 
     if plot_energy
-        p_energy = plot(1:length(E_history), E_history,
+        p_energy = plot(1:length(E_plot), E_plot,
              xlabel="DMC step", ylabel="E", title="DMC Energy History", linewidth=2)
         display(p_energy)
         println("\n>>> DMC Energy History plot created. Press ENTER to continue...")
@@ -135,6 +164,6 @@ function dmc(x_init::Vector{Float64}, y_init::Vector{Float64},
 
     E_dmc     = mean(E_history)
     E_dmc_err = std(E_history) / sqrt(length(E_history))
-    println("\nDMC result: E = $E_dmc ± $E_dmc_err")
+    
     return E_dmc, E_dmc_err, E_history
 end

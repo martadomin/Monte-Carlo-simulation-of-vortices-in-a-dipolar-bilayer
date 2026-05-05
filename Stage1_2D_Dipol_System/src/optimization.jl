@@ -34,60 +34,34 @@ function sweep_Rmatch(L::Float64, num_part::Int, nr0_sq::Float64, R_match_vals::
                                                                                                                                 plot_every=10^2,
                                                                                                                                 progress=true)
                                                                                                                                 
-        # # Block averaging to get final energy estimates
-        # block_sizes = [10, 20, 30, 40, 50, 100, 150, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1500, 1600, 1700, 1800, 1900, 2000]
-        # sigmas = Float64[]
-        # sigmas_drift = Float64[]
-        # sigmas_laplacian = Float64[]
-        # for B in block_sizes
-        #     _, sigma = blocking_statistics(energies_vmc, B)
-        #     _, sigma_drift = blocking_statistics(energies_drift_vmc, B)
-        #     _, sigma_laplacian = blocking_statistics(energies_laplacian_vmc, B)
-        #     push!(sigmas, sigma)
-        #     push!(sigmas_drift, sigma_drift)
-        #     push!(sigmas_laplacian, sigma_laplacian)
-        # end
+        # Block averaging to get final energy estimates
+        block_sizes = [10, 20, 30, 40, 50, 100, 150, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1500, 1600, 1700, 1800, 1900, 2000]
+        sigmas = Float64[]
+        sigmas_drift = Float64[]
+        sigmas_laplacian = Float64[]
+        for B in block_sizes
+            _, sigma = blocking_statistics(energies_vmc, B)
+            _, sigma_drift = blocking_statistics(energies_drift_vmc, B)
+            _, sigma_laplacian = blocking_statistics(energies_laplacian_vmc, B)
+            push!(sigmas, sigma)
+            push!(sigmas_drift, sigma_drift)
+            push!(sigmas_laplacian, sigma_laplacian)
+        end
 
-        # # Show plot and ask for plateau block size
-        # p = plot(block_sizes, sigmas,
-        #          marker=:circle,
-        #          xlabel="Block size",
-        #          ylabel="Standard error",
-        #          title="Blocking analysis, R_match = $(round(R_match, digits=3))",
-        #          linewidth=2,
-        #          xticks = block_sizes,
-        #          xrotation=45)
-        # plot!(block_sizes, sigmas_drift,
-        #       marker=:square,
-        #       linewidth=2)
-        # plot!(block_sizes, sigmas_laplacian,
-        #       marker=:diamond, 
-        #         linewidth=2,
-        #         label="Laplacian")
-        # display(p)
-
-        # println("\nR_match = $(round(R_match, digits=3))")
-        # println("Enter plateau block size for standard estimator: ")
-        # plateau_std = parse(Int, readline())
-        # println("Enter plateau block size for drift estimator: ")
-        # plateau_drift = parse(Int, readline())
-        # println("Enter plateau block size for laplacian estimator: ")
-        # plateau_laplacian = parse(Int, readline())
-        # # Get error at chosen block size
-        # avg_energy, sigma = blocking_statistics(energies_vmc, plateau_std)
-        # avg_energy_drift, sigma_drift = blocking_statistics(energies_drift_vmc, plateau_drift)
-        # avg_energy_laplacian, sigma_laplacian = blocking_statistics(energies_laplacian_vmc, plateau_laplacian)
-
-        # Apply assumed block sizes for error estimation
-        # B_std = 400, B_drift = 800, B_laplacian = 1000 are chosen based on previous runs and may be adjusted as needed using the code above for manual selection
-        _, sigma = blocking_statistics(energies_vmc, 400)
-        _, sigma_drift = blocking_statistics(energies_drift_vmc, 1000)
-        _, sigma_laplacian = blocking_statistics(energies_laplacian_vmc, 800)
+        # --- AUTOMATED PLATEAU DETECTION ---
+        plateau_std = detect_plateau(block_sizes, sigmas, window_size=4, rtol=0.05)
+        plateau_drift = detect_plateau(block_sizes, sigmas_drift, window_size=4, rtol=0.05)
+        plateau_laplacian = detect_plateau(block_sizes, sigmas_laplacian, window_size=4, rtol=0.05)
+        # -----------------------------------
+        # Get error at chosen block size
+        avg_energy, sigma = blocking_statistics(energies_vmc, plateau_std)
+        avg_energy_drift, sigma_drift = blocking_statistics(energies_drift_vmc, plateau_drift)
+        avg_energy_laplacian, sigma_laplacian = blocking_statistics(energies_laplacian_vmc, plateau_laplacian)
 
         # Store averages (normalized by density factor if needed by your plotting script)
-        energies[idx] = E_tot
-        energies_drift[idx] = E_drift
-        energies_laplacian[idx] = E_laplacian
+        energies[idx] = avg_energy
+        energies_drift[idx] = avg_energy_drift
+        energies_laplacian[idx] = avg_energy_laplacian
 
         # Store errors (normalized by density factor)
         error[idx] = sigma
