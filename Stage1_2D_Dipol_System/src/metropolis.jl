@@ -134,7 +134,7 @@ function metropolis(
     plot_every::Int = 100,
     progress::Bool = true,
     num_bins::Int = 100
-    )::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Vector{Float64}, Vector{Float64}}
+    )::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}}
 
     acceptance_ratio = 0.0
     n_uncorr = 0
@@ -254,5 +254,7 @@ function metropolis(
             E_int / n_uncorr,
             acceptance_ratio / num_steps,
             r_vals, 
-            g_r_normalized
+            g_r_normalized,
+            x_coord, #Save final configuration
+            y_coord
 end

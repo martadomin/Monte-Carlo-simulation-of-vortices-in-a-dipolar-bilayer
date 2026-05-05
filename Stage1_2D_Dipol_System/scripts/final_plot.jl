@@ -1,7 +1,5 @@
 using DelimitedFiles, Plots, LaTeXStrings
 
-num_part = 30
-nr0_sq_sim = [16.0, 32.0, 48.0, 64.0, 96.0, 128.0, 196.0, 256.0, 384.0, 512.0, 768.0, 1024.0]
 E_vmc = Float64[]
 error_E_vmc = Float64[]
 
@@ -24,19 +22,26 @@ E_tail = 2 * π / sqrt(num_part)
 # pgfplotsx()
 gr()
 
+xticks_vals = [0.0, 250.0, 500.0, 750.0, 1000.0]
+xticks_labels = [L"0", L"250", L"500", L"750", L"1000"]
+yticks_vals = [5.5, 6.0, 6.5, 7.0, 7.5]
+yticks_labels = [L"5.5", L"6.0", L"6.5", L"7.0", L"7.5"]
+
 p2 = plot(nr0_range, E_paper_normalized,
-          label=L"DMC\ \mathrm{fit\ (Astrakharchik\ 2007)}",
+          label=L"\mathrm{DMC\ fit\ (Astrakharchik\ 2007)}",
           xlabel=L"nr_0^2",
           ylabel=L"E/N \cdot (nr_0^2)^{-3/2}",
-          title=L"VMC\ \mathrm{vs\ DMC},\ N = %$(num_part)",
+          title=L"\mathrm{VMC\ vs\ DMC},\ N = %$(num_part)",
           linewidth=2,
           color=:blue,
           framestyle=:box,
-          legend=:topright)
+          legend=:topright,
+          xticks=(xticks_vals, xticks_labels),
+          yticks=(yticks_vals, yticks_labels))
 
 scatter!(nr0_sq_sim, E_vmc .+ E_tail,
          yerror=error_E_vmc,
-         label=L"VMC,\ N = %$(num_part)",
+         label=L"\mathrm{VMC,\ }N = %$(num_part)",
          marker=:circle,
          markersize=6,
          color=:red)

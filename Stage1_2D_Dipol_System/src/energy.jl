@@ -70,12 +70,11 @@ function local_kinetic_energy(xcoord::Vector{Float64}, ycoord::Vector{Float64}, 
                 dx = get_periodic_difference(xcoord[k], xcoord[i], L)
                 dy = get_periodic_difference(ycoord[k], ycoord[i], L)
                 r = sqrt(dx^2 + dy^2)
-                r_safe = max(r, eps(Float64))
-                du_dr = u2_first_derivative(r_safe, R_match, L, Constants)
-                d2u_dr2 = u2_second_derivative(r_safe, R_match, L, Constants)
-                F_drift_x += du_dr * (dx / r_safe)
-                F_drift_y += du_dr * (dy / r_safe)
-                scalar_term += d2u_dr2 + (du_dr / r_safe)
+                du_dr = u2_first_derivative(r, R_match, L, Constants)
+                d2u_dr2 = u2_second_derivative(r, R_match, L, Constants)
+                F_drift_x += du_dr * (dx / r)
+                F_drift_y += du_dr * (dy / r)
+                scalar_term += d2u_dr2 + (du_dr / r)
             end
         end
         E_kin += (F_drift_x^2 + F_drift_y^2 + scalar_term)
