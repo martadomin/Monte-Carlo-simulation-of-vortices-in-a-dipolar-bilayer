@@ -23,12 +23,6 @@ x_init = config_data[:, 1]
 y_init = config_data[:, 2]
 println("Loaded VMC final config from file")
 
-## Loop over different number of walkers
-num_walkers_vals = [1000]
-## Loop over different time steps
-Δτ_vals = [1e-3, 9e-4, 8e-4, 7e-4, 6e-4, 5e-4, 4e-4, 3e-4, 2e-4, 1e-4, 9e-5, 8e-5, 7e-5]
-num_steps_dmc = 10^5
-
 # Define the path where results will be saved
 results_path = joinpath(@__DIR__, "..", "data", "results", "DMC",
            "dmc_N$(num_part)_nr0sq$(nr0_sq).txt")
@@ -36,7 +30,7 @@ results_path = joinpath(@__DIR__, "..", "data", "results", "DMC",
 # Open the file ONCE before the loop begins to write results as they finish
 open(results_path, "w") do io
     # Write the header with num_walkers included
-    println(io, "num_walkers\tΔτ\tE_dmc\tError_E_dmc")
+    println(io, "nr0_sq\tnum_walkers\tΔτ\tE_dmc\tError_E_dmc")
     
     for num_walkers in num_walkers_vals
         # The target number of walkers is typically the initial number of walkers
@@ -47,7 +41,7 @@ open(results_path, "w") do io
             
             # Run DMC, ensuring plot_energy is false to prevent execution pausing
             E_dmc, E_dmc_err, E_history = dmc(x_init, y_init,
-                                             num_walkers, num_part, num_steps_dmc,
+                                             num_walkers, num_part, num_steps_MC,
                                              Δτ, L, R_opt, Constants,
                                              E_ref_initial, num_target,
                                              plot_energy=false)
@@ -78,7 +72,7 @@ open(results_path, "w") do io
             println("\nFinal DMC result for num_walkers = $num_walkers and Δτ = $Δτ: E = $avg_energy ± $sigma (using block size = $plateau_std)")
 
             # Write this specific run's result directly to the text file
-            println(io, "$(num_walkers)\t$(Δτ)\t$(avg_energy)\t$(sigma)")
+            println(io, "$(nr0_sq)\t$(num_walkers)\t$(Δτ)\t$(avg_energy)\t$(sigma)")
             
             # Flush ensures the line is saved to the hard drive immediately
             flush(io) 

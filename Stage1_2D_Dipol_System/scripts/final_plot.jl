@@ -3,17 +3,28 @@ using DelimitedFiles, Plots, LaTeXStrings, PGFPlotsX
 
 E_vmc = Float64[]
 error_E_vmc = Float64[]
+
+E_dmc = Float64[]
+error_E_dmc = Float64[]
+
 nr0_sq_vals = [16.0, 32.0, 64.0, 96.0, 128.0, 196.0, 256.0, 384.0, 512.0, 1024.0]
 num_part = 30
 L = sqrt.(num_part ./ nr0_sq_vals)
 
 for nr0_sq in nr0_sq_vals
+        nr0_sq_32 = num_part * nr0_sq^(3/2)
+
         vmc_path = joinpath(@__DIR__, "..", "data", "results", "VMC",
                 "vmc_N$(num_part)_nr0sq$(nr0_sq).txt")
         vmc_data = readdlm(vmc_path, '\t', Float64, skipstart=1)
-        nr0_sq_32 = num_part * nr0_sq^(3/2)
-        push!(E_vmc, vmc_data[1, 5] / nr0_sq_32)        
-        push!(error_E_vmc, vmc_data[1, 6] / nr0_sq_32) 
+        push!(E_vmc, vmc_data[1, 5] / nr0_sq_32)     
+        push!(error_E_vmc, vmc_data[1, 6] / nr0_sq_32)
+
+        dmc_path = joinpath(@__DIR__, "..", "data", "results", "DMC",
+           "dmc_N$(num_part)_nr0sq$(nr0_sq).txt")
+        dmc_data = readdlm(dmc_path, '\t', Float64, skipstart=1)
+        push!(E_dmc, dmc_data[1, 4] / nr0_sq_32)
+        push!(error_E_dmc, dmc_data[1, 5] / nr0_sq_32)
 end
 
 # Paper fit: E/N = a1*(nr0^2)^(3/2) + a2*(nr0^2)^(5/4) + a3*(nr0^2)^(1/2)
@@ -49,6 +60,12 @@ scatter!(nr0_sq_vals, E_vmc .+ E_tail,
          marker=:circle,
          markersize=6,
          color=:red)
+scatter!(nr0_sq_vals, E_dmc .+ E_tail,
+         yerror=error_E_dmc,
+         label=L"\mathrm{DMC\ results,\ }N = %$(num_part)",
+         marker=:square,
+         markersize=6,
+         color=:green)
 
 savefig(joinpath(@__DIR__, "..", "data", "plots",
         "plot_vmc_vs_paper_N$(num_part).pdf"))
