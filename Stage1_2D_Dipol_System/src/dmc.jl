@@ -113,10 +113,6 @@ function dmc(x_init::Vector{Float64}, y_init::Vector{Float64},
             resize!(drift_y_new, n)
         end
 
-        # 1. Drift Δτ/2 using OLD drift forces — free, no O(N^2)
-        # 2. Diffusion Δτ
-        # 3. energy_estimators at new position — gives new drift forces + energy
-        # 4. Drift Δτ/2 using NEW drift forces — free
         @threads for i in 1:n
             # Drift Δτ/2 at old position using precomputed drift
             x_d = wrap_position.(x_walkers[i] .+ drift_x_old[i] .* (Δτ/2), L)

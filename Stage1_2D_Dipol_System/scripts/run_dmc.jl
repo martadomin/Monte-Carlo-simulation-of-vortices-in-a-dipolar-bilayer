@@ -1,17 +1,4 @@
 # scripts/run_dmc.jl
-using DelimitedFiles, Plots, LaTeXStrings, Statistics, ProgressMeter, Base.Threads
-
-include(normpath(joinpath(@__DIR__, "..", "src", "utils.jl")))
-include(normpath(joinpath(@__DIR__, "..", "src", "jastrow.jl")))
-include(normpath(joinpath(@__DIR__, "..", "src", "energy.jl")))
-include(normpath(joinpath(@__DIR__, "..", "src", "metropolis.jl")))
-include(normpath(joinpath(@__DIR__, "..", "src", "dmc.jl")))
-include(normpath(joinpath(@__DIR__, "..", "src", "observables.jl")))
-
-# Parameters
-num_part      = 30
-nr0_sq        = 16.0
-L             = sqrt(num_part / nr0_sq)
 
 # Read VMC energy as initial E_ref
 vmc_path = joinpath(@__DIR__, "..", "data", "results", "VMC",
@@ -39,7 +26,7 @@ println("Loaded VMC final config from file")
 ## Loop over different number of walkers
 num_walkers_vals = [1000]
 ## Loop over different time steps
-Δτ_vals = [0.8, 0.6, 0.4, 0.2, 0.1, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01]
+Δτ_vals = [1e-3, 9e-4, 8e-4, 7e-4, 6e-4, 5e-4, 4e-4, 3e-4, 2e-4, 1e-4, 9e-5, 8e-5, 7e-5]
 num_steps_dmc = 10^5
 
 # Define the path where results will be saved
