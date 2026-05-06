@@ -1,12 +1,4 @@
-include(normpath(joinpath(@__DIR__, "jastrow.jl")))
-include(normpath(joinpath(@__DIR__, "metropolis.jl")))
-include(normpath(joinpath(@__DIR__, "energy.jl")))
-include(normpath(joinpath(@__DIR__, "utils.jl")))
-include(normpath(joinpath(@__DIR__, "observables.jl")))
-
-using Base.Threads
-
-function sweep_Rmatch(L::Float64, num_part::Int, nr0_sq::Float64, R_match_vals::Vector{Float64},
+function sweep_Rmatch(L::Float64, num_part::Int, R_match_vals::Vector{Float64},
                       num_steps::Int)::NamedTuple
 
     energies = Vector{Float64}(undef, length(R_match_vals))
@@ -24,15 +16,15 @@ function sweep_Rmatch(L::Float64, num_part::Int, nr0_sq::Float64, R_match_vals::
         block_size = 100
         delta, x_init, y_init = tune_delta(x_coord, y_coord, L, R_match, Constants; target_ratio,
                                             num_tune_steps, block_size)
-        energies_vmc, energies_drift_vmc, energies_laplacian_vmc, E_tot, _, E_drift, E_laplacian,E_kin, E_int, _, _, _, _ = metropolis(num_part,
+        energies_vmc, energies_drift_vmc, energies_laplacian_vmc, E_tot, _, E_drift, E_laplacian, E_kin, E_int, _, _, _, _, _ = metropolis(num_part,
                                                                                                                                 num_steps,
-                                                                                                                                num_bins=100,
                                                                                                                                 delta, L, R_match,
                                                                                                                                 Constants;
                                                                                                                                 x_init=x_init, y_init=y_init,
                                                                                                                                 final_energy_plot=false,
                                                                                                                                 plot_every=10^2,
-                                                                                                                                progress=true)
+                                                                                                                                progress=true,
+                                                                                                                                num_bins=100)
                                                                                                                                 
         # Block averaging to get final energy estimates
         block_sizes = [10, 20, 30, 40, 50, 100, 150, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1500, 1600, 1700, 1800, 1900, 2000]

@@ -3,7 +3,7 @@ using Plots, LaTeXStrings
 #First rough sweep to find the approximate location of the optimal R_match:
 R_match_vals_coarse = collect(LinRange(0.1*L/2, 0.9*L/2, 20))
 println("\n--- Coarse sweep ($(length(R_match_vals_coarse)) points, $num_steps_coarse steps) ---")
-results_coarse = sweep_Rmatch(L, num_part, nr0_sq, 
+results_coarse = sweep_Rmatch(L, num_part, 
                                R_match_vals_coarse, num_steps_coarse)
 R_opt_rough = results_coarse.R_match_vals[argmin(results_coarse.energies)]
 println("Rough optimal R_match = $R_opt_rough")
@@ -11,7 +11,7 @@ println("Rough optimal R_match = $R_opt_rough")
 #Second fine sweep around the optimal R_match found in the coarse sweep:
 R_match_vals_fine = collect(LinRange(0.7*R_opt_rough, 1.3*R_opt_rough, 20))
 println("\n--- Fine sweep ($(length(R_match_vals_fine)) points, $num_steps_fine steps) ---")
-results_fine = sweep_Rmatch(L, num_part, nr0_sq, 
+results_fine = sweep_Rmatch(L, num_part, 
                              R_match_vals_fine, num_steps_fine)
 R_opt = results_fine.R_match_vals[argmin(results_fine.energies)]
 

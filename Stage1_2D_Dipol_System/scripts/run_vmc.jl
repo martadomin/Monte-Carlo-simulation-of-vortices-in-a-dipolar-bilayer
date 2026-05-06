@@ -3,6 +3,8 @@
 
 using Plots, LaTeXStrings
 
+nr0_sq_32 = num_part * nr0_sq^(3/2)
+
 # Read R_opt from sweep file
 rmatch_path = joinpath(@__DIR__, "..", "data", "sweep_results",
               "Rmatch_sweep_N$(num_part)_nr0sq$(nr0_sq).txt")

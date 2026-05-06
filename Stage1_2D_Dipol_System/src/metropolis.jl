@@ -82,7 +82,7 @@ function tune_delta(
         end
         # adjust delta to push acceptance ratio towards target
         ratio = accepted / block_size
-        delta *= ratio / target_ratio
+        delta *= (ratio + 1e-2) / target_ratio
         delta = min(delta, L/2)  
         delta = max(delta, 1e-6) 
     end
@@ -149,8 +149,6 @@ function metropolis(
     energies_drift = Float64[]
     energies_laplacian = Float64[]
     energy_plot = Float64[]
-    energy_plot_1 = Float64[]
-    energy_plot_2 = Float64[]
     step_plot = Int[]
     g_r = zeros(Float64, num_bins)
     n_gr_samples = 0 
@@ -158,6 +156,7 @@ function metropolis(
     E_local_drift = NaN
     E_local_laplacian = NaN
     E_kinetic = NaN
+    F_drift = NaN
     E_potential = NaN
     
     if x_init === nothing || y_init === nothing
@@ -167,7 +166,8 @@ function metropolis(
         y_coord = copy(y_init)
     end
 
-    E_local, E_local_drift, E_local_laplacian, E_kinetic, E_potential = local_energy(x_coord, y_coord, L, R_match, Constants)
+    _, _, E_local, E_local_drift, E_local_laplacian, E_kinetic, E_potential = energy_estimators(x_coord, y_coord, L, R_match, Constants)
+    @assert !isnan(E_local) "Initial configuration produced NaN energy. Re-initialize."
     
     if progress == true
         progress_bar = Progress(num_steps; desc="Running Metropolis $num_part...", showspeed=true)
@@ -187,18 +187,19 @@ function metropolis(
             y_coord = y_new
             acceptance_ratio += 1
 
-            E_local, E_local_drift, E_local_laplacian, E_kinetic, E_potential = local_energy(x_coord, y_coord, L, R_match, Constants)
+            _, _, E_local, E_local_drift, E_local_laplacian, E_kinetic, E_potential = energy_estimators(x_coord, y_coord, L, R_match, Constants)
         end
 
         if i % step_block == 0
-            push!(energies, E_local)
-            push!(energies_drift, E_local_drift)
-            push!(energies_laplacian, E_local_laplacian)
 
             if isnan(E_local)
                 @warn "NaN detected at step $i: E_local = $E_local"
                 continue  # Skip this iteration to avoid polluting data
             end
+
+            push!(energies, E_local)
+            push!(energies_drift, E_local_drift)
+            push!(energies_laplacian, E_local_laplacian)
 
             E_tot += E_local
             E_sq += E_local^2
@@ -211,9 +212,6 @@ function metropolis(
             if i % plot_every == 0
                 push!(step_plot, i)
                 push!(energy_plot, E_local_drift / num_part)
-                push!(energy_plot_1, E_local_laplacian / num_part)
-                push!(energy_plot_2, E_local / num_part)
-
             end
 
             accumulate_gr!(g_r, x_coord, y_coord, L)
@@ -222,7 +220,7 @@ function metropolis(
     end
 
     if final_energy_plot
-        energy_plot = plot(
+        p1 = plot(
         step_plot,
         energy_plot,
         xlabel="Step",
@@ -231,7 +229,7 @@ function metropolis(
         legend=false,
         lw=2,
         )
-        display(energy_plot)
+        display(p1)
         println("\n>>> Energy Graph created. Press ENTER to continue...")
         if !isinteractive() # Solo bloquea si no estás en un REPL interactivo
             readline()
