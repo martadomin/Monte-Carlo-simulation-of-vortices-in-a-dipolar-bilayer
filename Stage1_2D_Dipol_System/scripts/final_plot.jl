@@ -7,7 +7,7 @@ error_E_vmc = Float64[]
 E_dmc = Float64[]
 error_E_dmc = Float64[]
 
-nr0_sq_vals = [16.0, 32.0, 64.0, 96.0, 128.0, 196.0, 256.0, 384.0, 512.0, 1024.0]
+nr0_sq_vals = [16.0, 32.0, 64.0, 96.0, 128.0, 196.0]
 num_part = 30
 L = sqrt.(num_part ./ nr0_sq_vals)
 
