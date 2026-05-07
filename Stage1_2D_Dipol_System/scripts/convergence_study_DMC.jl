@@ -12,6 +12,13 @@ include(normpath(joinpath(@__DIR__, "..", "src", "observables.jl")))
 num_part      = 30
 nr0_sq        = 16.0
 L             = sqrt(num_part / nr0_sq)
+quadratic     = true
+
+if !quadratic
+    type_dmc = "linear"
+else
+    type_dmc = "quadratic"
+end
 
 # Read VMC energy as initial E_ref
 vmc_path = joinpath(@__DIR__, "..", "data", "results", "VMC",
@@ -37,14 +44,14 @@ y_init = config_data[:, 2]
 println("Loaded VMC final config from file")
 
 ## Loop over different number of walkers
-num_walkers_vals = [1000]
+num_walkers_vals = [200]
 ## Loop over different time steps
-Δτ_vals = [1e-3, 9e-4, 8e-4, 7e-4, 6e-4, 5e-4, 4e-4, 3e-4, 2e-4, 1e-4, 9e-5, 8e-5, 7e-5]
+Δτ_vals = [0.01, 0.009, 0.008, 0.007, 0.006, 0.005, 0.004, 0.003, 0.002, 0.001, 0.0009, 0.0008, 0.0007, 0.0006, 0.0005, 0.0004, 0.0003, 0.0002, 0.0001, 0.00009, 0.00008, 0.00007, 0.00006, 0.00005, 0.00004, 0.00003, 0.00002, 0.00001]
 num_steps_dmc = 10^5
 
 # Define the path where results will be saved
 results_path = joinpath(@__DIR__, "..", "data", "results", "DMC",
-           "dmc_N$(num_part)_nr0sq$(nr0_sq).txt")
+           "dmc_N$(num_part)_nr0sq$(nr0_sq)_$(type_dmc).txt")
 
 # Open the file ONCE before the loop begins to write results as they finish
 open(results_path, "w") do io
@@ -63,7 +70,8 @@ open(results_path, "w") do io
                                              num_walkers, num_part, num_steps_dmc,
                                              Δτ, L, R_opt, Constants,
                                              E_ref_initial, num_target,
-                                             plot_energy=false)
+                                             plot_energy=false,
+                                             quadratic=quadratic)
 
             println("\nRaw DMC result for num_walkers = $num_walkers and Δτ = $Δτ: E = $E_dmc ± $E_dmc_err")
 

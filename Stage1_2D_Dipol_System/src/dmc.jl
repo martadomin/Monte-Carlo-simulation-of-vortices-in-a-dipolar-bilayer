@@ -71,6 +71,7 @@ function dmc(x_init::Vector{Float64}, y_init::Vector{Float64},
              Constants::Tuple{Float64, Float64, Float64},
              E_ref_initial::Float64, num_target::Int;
              num_equil::Int = num_steps ÷ 5,
+             quadratic::Bool = false,
              plot_energy::Bool = false)
 
     D = 0.5
@@ -99,7 +100,9 @@ function dmc(x_init::Vector{Float64}, y_init::Vector{Float64},
             x_walkers[i], y_walkers[i], L, R_match, Constants)
     end
 
-    prog = Progress(num_steps; desc="Running DMC...", showspeed=true)
+    mode = quadratic ? "Quadratic (QDMC)" : "Linear DMC"
+    prog = Progress(num_steps; desc="Running $mode...", showspeed=true)
+
 
     for step in 1:num_steps
         next!(prog)
@@ -113,76 +116,107 @@ function dmc(x_init::Vector{Float64}, y_init::Vector{Float64},
             resize!(drift_y_new, n)
         end
 
-        @threads for i in 1:n
-            # Drift Δτ/2 at old position using precomputed drift
-            x_d = wrap_position.(x_walkers[i] .+ drift_x_old[i] .* (Δτ/2), L)
-            y_d = wrap_position.(y_walkers[i] .+ drift_y_old[i] .* (Δτ/2), L)
+        if quadratic
 
-            # Diffusion
-            x_d, y_d = diffusion_step(x_d, y_d, L, D, Δτ)
+            @threads for i in 1:n
+                # Drift Δτ/2 at old position using precomputed drift
+                x_d = wrap_position.(x_walkers[i] .+ drift_x_old[i] .* (Δτ/2), L)
+                y_d = wrap_position.(y_walkers[i] .+ drift_y_old[i] .* (Δτ/2), L)
 
-            # energy_estimators — single O(N^2) pass
-            drift_x_new[i], drift_y_new[i], E_loc_new[i], _, _, _, _ = energy_estimators(
-                x_d, y_d, L, R_match, Constants)
+                # Diffusion
+                x_d, y_d = diffusion_step(x_d, y_d, L, D, Δτ)
 
-            # Drift Δτ/2 at new position using new drift forces
-            new_x[i] = wrap_position.(x_d .+ drift_x_new[i] .* (Δτ/2), L)
-            new_y[i] = wrap_position.(y_d .+ drift_y_new[i] .* (Δτ/2), L)
-        end
+                # energy_estimators — single O(N^2) pass
+                drift_x_new[i], drift_y_new[i], E_loc_new[i], _, _, _, _ = energy_estimators(
+                    x_d, y_d, L, R_match, Constants)
 
-        x_walkers   = new_x[1:n]
-        y_walkers   = new_y[1:n]
-        drift_x_old = drift_x_new[1:n]
-        drift_y_old = drift_y_new[1:n]
-
-        # 5. Weights update
-        for i in 1:n
-            weights[i] *= weight_update(E_loc_old[i], E_loc_new[i], E_ref, Δτ)
-        end
-
-        avg_E = mean(E_loc_new[1:n])
-
-        # 6. Branching
-        num_copies = branching_step(weights[1:n])
-
-        new_x_b     = Vector{Vector{Float64}}()
-        new_y_b     = Vector{Vector{Float64}}()
-        new_dx      = Vector{Vector{Float64}}()
-        new_dy      = Vector{Vector{Float64}}()
-        E_loc_old_b = Float64[]
-
-        for i in 1:n
-            for _ in 1:num_copies[i]
-                push!(new_x_b, copy(x_walkers[i]))
-                push!(new_y_b, copy(y_walkers[i]))
-                push!(new_dx,  copy(drift_x_old[i]))
-                push!(new_dy,  copy(drift_y_old[i]))
-                push!(E_loc_old_b, E_loc_new[i])
+                # Drift Δτ/2 at new position using new drift forces
+                new_x[i] = wrap_position.(x_d .+ drift_x_new[i] .* (Δτ/2), L)
+                new_y[i] = wrap_position.(y_d .+ drift_y_new[i] .* (Δτ/2), L)
             end
-        end
 
-        x_walkers   = new_x_b
-        y_walkers   = new_y_b
-        drift_x_old = new_dx
-        drift_y_old = new_dy
-        E_loc_old   = E_loc_old_b
-        weights     = ones(Float64, length(x_walkers))
+            x_walkers   = new_x[1:n]
+            y_walkers   = new_y[1:n]
+            drift_x_old = drift_x_new[1:n]
+            drift_y_old = drift_y_new[1:n]
+
+            avg_E = mean(E_loc_new[1:n])
+
+            # # 5. Weights update
+            # for i in 1:n
+            #     weights[i] *= weight_update(E_loc_old[i], E_loc_new[i], E_ref, Δτ)
+            # end
+
+        else
+            @threads for i in 1:n
+                # Diffusion
+                x_d, y_d = diffusion_step(x_walkers[i], y_walkers[i], L, D, Δτ)
+
+                x_d = wrap_position.(x_d .+ drift_x_old[i] .* Δτ, L)
+                y_d = wrap_position.(y_d .+ drift_y_old[i] .* Δτ, L)
+
+                drift_x_old[i], drift_y_old[i], E_loc_new[i], _, _, _, _ = energy_estimators( x_d, y_d, L, R_match, Constants)                                       
+
+                new_x[i] = x_d
+                new_y[i] = y_d
+
+            end
+
+            x_walkers   = new_x[1:n]
+            y_walkers   = new_y[1:n]
+
+            avg_E = mean(E_loc_new[1:n])
+
+            # # 5. Weights update
+            # for i in 1:n
+            #     weights[i] *= weight_update(E_loc_old[i], E_loc_new[i], E_ref, Δτ)
+            # end
+        end
+        
+
+        # # 6. Branching
+        # num_copies = branching_step(weights[1:n])
+
+        # new_x_b     = Vector{Vector{Float64}}()
+        # new_y_b     = Vector{Vector{Float64}}()
+        # new_dx      = Vector{Vector{Float64}}()
+        # new_dy      = Vector{Vector{Float64}}()
+        # E_loc_old_b = Float64[]
+
+        # for i in 1:n
+        
+        #     for _ in 1:num_copies[i]
+        #         push!(new_x_b, copy(x_walkers[i]))
+        #         push!(new_y_b, copy(y_walkers[i]))
+        #         push!(new_dx,  copy(drift_x_old[i]))
+        #         push!(new_dy,  copy(drift_y_old[i]))
+        #         push!(E_loc_old_b, E_loc_new[i])
+        #     end
+        # end
+
+        # x_walkers   = new_x_b
+        # y_walkers   = new_y_b
+        # drift_x_old = new_dx
+        # drift_y_old = new_dy
+        # E_loc_old   = E_loc_old_b
+        # weights     = ones(Float64, length(x_walkers))
 
         if isempty(x_walkers)
             @warn "All walkers died at step $step"
             break
         end
 
-        # 7. Population control
-        E_ref = population_control(length(x_walkers), num_target, avg_E, Δτ)
+        # 7. Population control, with a 10% tolerance to prevent over-correction
+        if abs(length(x_walkers)- num_target)/ num_target > 0.10
+            E_ref = population_control(length(x_walkers), num_target, avg_E, Δτ)
+        end
 
         # 8. Accumulate
         if step > num_equil
             push!(E_history, avg_E)
         end
         push!(E_plot, avg_E)
-
-        if step % 10000 == 0
+           if step % 10000 == 0
             println("\nStep $step: Walkers=$(length(x_walkers)), avg_E=$(round(avg_E/num_part, digits=5)), E_ref=$(round(E_ref/num_part, digits=5))")
         end
     end
