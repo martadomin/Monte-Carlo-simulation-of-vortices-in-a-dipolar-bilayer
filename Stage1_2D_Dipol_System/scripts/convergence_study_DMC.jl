@@ -46,8 +46,8 @@ println("Loaded VMC final config from file")
 ## Loop over different number of walkers
 num_walkers_vals = [200]
 ## Loop over different time steps
-Δτ_vals = [1e-5]
-num_steps_dmc = 10^6
+Δτ_vals = [1e-3, 9e-4, 8e-4, 7e-4, 6e-4, 5e-4, 5e-4, 4e-4, 3e-4, 2e-4, 1e-4, 9e-5, 8e-5, 7e-5, 6e-5, 5e-5, 4e-5, 3e-5, 2e-5, 1e-5]
+num_steps_dmc = 10^5
 
 # Define the path where results will be saved
 results_path = joinpath(@__DIR__, "..", "data", "results", "DMC",

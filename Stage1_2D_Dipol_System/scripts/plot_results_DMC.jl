@@ -1,6 +1,7 @@
 using DelimitedFiles, Plots, LaTeXStrings
 
 ENV["PATH"] = "C:\\Users\\marta\\AppData\\Local\\Programs\\MiKTeX\\miktex\\bin\\x64;" * ENV["PATH"]
+# pgfplotsx()
 gr()
 
 num_part  = 30
@@ -16,8 +17,18 @@ else
 end 
 
 # Load data Linear DMC
-dmc_path_lin = joinpath(@__DIR__, "..", "data", "results", "DMC",
+dmc_path_lin_no_branc = joinpath(@__DIR__, "..", "data", "results", "DMC",
            "dmc_N$(num_part)_nr0sq$(nr0_sq)_linear_no_branching.txt")
+dmc_data_lin_no_branc = readdlm(dmc_path_lin_no_branc, '\t', Float64, skipstart=1)
+
+num_walkers_vals_lin_no_branc = dmc_data_lin_no_branc[:, 1]
+Δτ_vals_lin_no_branc          = dmc_data_lin_no_branc[:, 2]
+E_dmc_lin_no_branc            = dmc_data_lin_no_branc[:, 3]
+Error_E_dmc_lin_no_branc      = dmc_data_lin_no_branc[:, 4]
+
+# Load data Linear DMC
+dmc_path_lin = joinpath(@__DIR__, "..", "data", "results", "DMC",
+           "dmc_N$(num_part)_nr0sq$(nr0_sq)_linear.txt")
 dmc_data_lin = readdlm(dmc_path_lin, '\t', Float64, skipstart=1)
 
 num_walkers_vals_lin = dmc_data_lin[:, 1]
@@ -26,14 +37,25 @@ E_dmc_lin            = dmc_data_lin[:, 3]
 Error_E_dmc_lin      = dmc_data_lin[:, 4]
 
 #Load data Quadratic DMC
-dmc_path_quad = joinpath(@__DIR__, "..", "data", "results", "DMC",
+dmc_path_quad_no_branc = joinpath(@__DIR__, "..", "data", "results", "DMC",
               "dmc_N$(num_part)_nr0sq$(nr0_sq)_quadratic_no_branching.txt")
+dmc_data_quad_no_branc = readdlm(dmc_path_quad_no_branc, '\t', Float64, skipstart=1)
+
+num_walkers_vals_quad_no_branc = dmc_data_quad_no_branc[:, 1]
+Δτ_vals_quad_no_branc          = dmc_data_quad_no_branc[:, 2]
+E_dmc_quad_no_branc            = dmc_data_quad_no_branc[:, 3]
+Error_E_dmc_quad_no_branc      = dmc_data_quad_no_branc[:, 4]
+
+#Load data Quadratic DMC
+dmc_path_quad = joinpath(@__DIR__, "..", "data", "results", "DMC",
+              "dmc_N$(num_part)_nr0sq$(nr0_sq)_quadratic.txt")
 dmc_data_quad = readdlm(dmc_path_quad, '\t', Float64, skipstart=1)
 
 num_walkers_vals_quad = dmc_data_quad[:, 1]
 Δτ_vals_quad          = dmc_data_quad[:, 2]
 E_dmc_quad            = dmc_data_quad[:, 3]
 Error_E_dmc_quad      = dmc_data_quad[:, 4]
+
 
 #Load data VMC
 vmc_path = joinpath(@__DIR__, "..", "data", "results", "VMC",
@@ -66,7 +88,7 @@ p1 = plot(
     framestyle = :box,
     grid    = true,
     gridalpha = 0.3,
-    xlim = (1e-5, 1e-4),
+    xlim = (1e-5, 1e-3),
     ylim = (5.64, 5.69)
 )
 
@@ -84,14 +106,12 @@ for (idx, nw) in enumerate(unique_walkers)
     Err_sub_quad = Error_norm_quad[mask_quad]
 
     plot!(p1, Δτ_sub_lin, E_sub_lin;
-          yerror = Err_sub_lin,
-          label  = L"N_w = %$(Int(nw)) \; \mathrm{linear}",
+          label = "Nw = $(Int(nw)) linear",
           marker = :circle, markersize = 5, linewidth = 2,
           color  = colors[idx])
 
     plot!(p1, Δτ_sub_quad, E_sub_quad;
-          yerror    = Err_sub_quad,
-          label     = L"N_w = %$(Int(nw)) \; \mathrm{quadratic}",
+          label = "Nw = $(Int(nw)) quadratic",
           marker    = :square, markersize = 5, linewidth = 2,
           color     = colors[idx+1], linestyle = :dash)
 end
@@ -108,37 +128,40 @@ savefig(p1, joinpath(@__DIR__, "..", "data", "plots", "DMC", "dmc_E_vs_dtau_N$(n
 println("Saved Plot 1")
 display(p1)
 
-# # ------------------------------------------
-# # Plot 2: Energy vs num_walkers for each Δτ
-# # ------------------------------------------
-# colors2 = palette(:plasma, length(unique_Δτ))
+# ------------------------------------------
+# Plot 2: Energy vs num_walkers for each Δτ
+# ------------------------------------------
+colors2 = palette(:plasma, length(unique_Δτ))
 
-# p2 = plot(
-#     xlabel  = L"N_{\mathrm{walkers}}",
-#     ylabel  = L"E/N \cdot (nr_0^2)^{-3/2}",
-#     title   = L"DMC\ \mathrm{Energy\ vs}\ N_{\mathrm{walkers}},\ N=30,\ nr_0^2=16",
-#     legend  = :topright,
-#     framestyle = :box,
-#     grid    = true,
-#     gridalpha = 0.3
-# )
+p2 = plot(
+    xlabel  = L"N_{\mathrm{walkers}}",
+    ylabel  = L"E/N \cdot (nr_0^2)^{-3/2}",
+    title   = L"DMC\ \mathrm{Energy\ vs}\ N_{\mathrm{walkers}},\ N=30,\ nr_0^2=16",
+    legend  = :topright,
+    framestyle = :box,
+    grid    = true,
+    gridalpha = 0.3,
+    xscale  = :log10
+)
 
-# for (idx, dt) in enumerate(unique_Δτ)
-#     mask = Δτ_vals .== dt
-#     nw_sub  = num_walkers_vals[mask]
-#     E_sub   = E_norm[mask]
-#     Err_sub = Error_norm[mask]
-    
-#     plot!(p2, nw_sub, E_sub,
-#           yerror   = Err_sub,
-#           label    = L"\Delta\tau = %$(dt)",
-#           marker   = :circle,
-#           markersize = 5,
-#           linewidth  = 2,
-#           color    = colors2[idx])
-# end
+unique_Δτ = [1e-4]
 
-# savefig(p2, joinpath(@__DIR__, "..", "data", "plots", "DMC", "dmc_E_vs_walkers_N$(num_part)_nr0sq$(nr0_sq).pdf"))
-# println("Saved Plot 2")
-# display(p2)
+for (idx, dt) in enumerate(unique_Δτ)
+    mask = Δτ_vals_quad .== dt
+    nw_sub  = num_walkers_vals_quad[mask]
+    E_sub   = E_norm_quad[mask]
+    Err_sub = Error_norm_quad[mask]
+
+    scatter!(p2, 1 ./nw_sub, E_sub,
+          yerror   = Err_sub,
+          label = "Δτ = $(dt)",
+          marker   = :circle,
+          markersize = 5,
+          linewidth  = 0,
+          color    = colors2[idx])
+end
+
+savefig(p2, joinpath(@__DIR__, "..", "data", "plots", "DMC", "dmc_E_vs_walkers_N$(num_part)_nr0sq$(nr0_sq).pdf"))
+println("Saved Plot 2")
+display(p2)
 
