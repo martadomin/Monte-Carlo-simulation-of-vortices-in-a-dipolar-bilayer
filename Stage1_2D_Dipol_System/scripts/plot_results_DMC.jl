@@ -66,7 +66,7 @@ p1 = plot(
     framestyle = :box,
     grid    = true,
     gridalpha = 0.3,
-    xlim = (1e-5, 1e-3),
+    xlim = (1e-5, 1e-4),
     ylim = (5.64, 5.69)
 )
 
