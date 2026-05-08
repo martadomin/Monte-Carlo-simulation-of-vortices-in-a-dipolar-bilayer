@@ -101,6 +101,7 @@ function dmc(x_init::Vector{Float64}, y_init::Vector{Float64},
     end
 
     mode = quadratic ? "Quadratic (QDMC)" : "Linear DMC"
+    println(mode)
     prog = Progress(num_steps; desc="Running $mode...", showspeed=true)
 
 
@@ -117,30 +118,35 @@ function dmc(x_init::Vector{Float64}, y_init::Vector{Float64},
         end
 
         if quadratic
-
             @threads for i in 1:n
-                # Drift Δτ/2 at old position using precomputed drift
-                x_d = wrap_position.(x_walkers[i] .+ drift_x_old[i] .* (Δτ/2), L)
-                y_d = wrap_position.(y_walkers[i] .+ drift_y_old[i] .* (Δτ/2), L)
+            # Drift Δτ/2 at old position
+            x_d = wrap_position.(x_walkers[i] .+ drift_x_old[i] .* (Δτ/2), L)
+            y_d = wrap_position.(y_walkers[i] .+ drift_y_old[i] .* (Δτ/2), L)
 
-                # Diffusion
-                x_d, y_d = diffusion_step(x_d, y_d, L, D, Δτ)
+            # Diffusion
+            x_d, y_d = diffusion_step(x_d, y_d, L, D, Δτ)
 
-                # energy_estimators — single O(N^2) pass
-                drift_x_new[i], drift_y_new[i], E_loc_new[i], _, _, _, _ = energy_estimators(
-                    x_d, y_d, L, R_match, Constants)
+            # Forces at post-diffusion — needed for second half-drift only, not cached
+            dx_mid, dy_mid, _, _, _, _, _ = energy_estimators(x_d, y_d, L, R_match, Constants)
 
-                # Drift Δτ/2 at new position using new drift forces
-                new_x[i] = wrap_position.(x_d .+ drift_x_new[i] .* (Δτ/2), L)
-                new_y[i] = wrap_position.(y_d .+ drift_y_new[i] .* (Δτ/2), L)
-            end
+            # Drift Δτ/2 → final position
+            new_x[i] = wrap_position.(x_d .+ dx_mid .* (Δτ/2), L)
+            new_y[i] = wrap_position.(y_d .+ dy_mid .* (Δτ/2), L)
 
+            # Forces AND energy at final position — cached for next step
+            drift_x_new[i], drift_y_new[i], E_loc_new[i], _, _, _, _ = energy_estimators(
+                new_x[i], new_y[i], L, R_match, Constants)
+        end
             x_walkers   = new_x[1:n]
             y_walkers   = new_y[1:n]
             drift_x_old = drift_x_new[1:n]
             drift_y_old = drift_y_new[1:n]
 
             avg_E = mean(E_loc_new[1:n])
+
+            if isnan(avg_E)
+                @warn "Average local energy is NaN at step $step. Setting avg_E to E_ref_initial to prevent divergence."
+            end
 
             # # 5. Weights update
             # for i in 1:n
@@ -166,6 +172,10 @@ function dmc(x_init::Vector{Float64}, y_init::Vector{Float64},
             y_walkers   = new_y[1:n]
 
             avg_E = mean(E_loc_new[1:n])
+
+            if isnan(avg_E)
+                @warn "Average local energy is NaN at step $step. Setting avg_E to E_ref_initial to prevent divergence."
+            end
 
             # # 5. Weights update
             # for i in 1:n

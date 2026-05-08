@@ -1,7 +1,7 @@
 using DelimitedFiles, Plots, LaTeXStrings
 
 ENV["PATH"] = "C:\\Users\\marta\\AppData\\Local\\Programs\\MiKTeX\\miktex\\bin\\x64;" * ENV["PATH"]
-pgfplotsx()
+gr()
 
 num_part  = 30
 nr0_sq    = 16.0
@@ -17,7 +17,7 @@ end
 
 # Load data Linear DMC
 dmc_path_lin = joinpath(@__DIR__, "..", "data", "results", "DMC",
-           "dmc_N$(num_part)_nr0sq$(nr0_sq)_linear.txt")
+           "dmc_N$(num_part)_nr0sq$(nr0_sq)_linear_no_branching.txt")
 dmc_data_lin = readdlm(dmc_path_lin, '\t', Float64, skipstart=1)
 
 num_walkers_vals_lin = dmc_data_lin[:, 1]
@@ -27,7 +27,7 @@ Error_E_dmc_lin      = dmc_data_lin[:, 4]
 
 #Load data Quadratic DMC
 dmc_path_quad = joinpath(@__DIR__, "..", "data", "results", "DMC",
-              "dmc_N$(num_part)_nr0sq$(nr0_sq)_quadratic.txt")
+              "dmc_N$(num_part)_nr0sq$(nr0_sq)_quadratic_no_branching.txt")
 dmc_data_quad = readdlm(dmc_path_quad, '\t', Float64, skipstart=1)
 
 num_walkers_vals_quad = dmc_data_quad[:, 1]
@@ -44,12 +44,16 @@ Error_E_vmc = vmc_data[1, 6]
 
 #Load data 
 
-E_norm       = E_dmc ./ nr0_sq_32
-Error_norm   = Error_E_dmc ./ nr0_sq_32
+E_norm_lin      = E_dmc_lin ./ nr0_sq_32
+Error_norm_lin   = Error_E_dmc_lin ./ nr0_sq_32
 
-unique_walkers = sort(unique(num_walkers_vals))
-unique_Δτ      = sort(unique(Δτ_vals))
-colors         = palette(:viridis, length(unique_walkers))
+E_norm_quad = E_dmc_quad ./ nr0_sq_32
+Error_norm_quad = Error_E_dmc_quad ./ nr0_sq_32
+
+
+unique_walkers = sort(unique(num_walkers_vals_lin))
+unique_Δτ      = sort(unique(Δτ_vals_lin))
+colors         = palette(:viridis, length(unique_walkers)+1)
 
 # ------------------------------------------
 # Plot 1: Energy vs Δτ for each num_walkers
@@ -58,26 +62,38 @@ p1 = plot(
     xlabel  = L"\Delta\tau",
     ylabel  = L"E/N \cdot (nr_0^2)^{-3/2}",
     title   = L"DMC\ \mathrm{Energy\ vs}\ \Delta\tau,\ N=30,\ nr_0^2=16",
-    legend  = :topright,
-    xscale  = :log10,
+    legend  = :topleft,
     framestyle = :box,
     grid    = true,
-    gridalpha = 0.3
+    gridalpha = 0.3,
+    xlim = (1e-5, 1e-3),
+    ylim = (5.64, 5.69)
 )
 
 for (idx, nw) in enumerate(unique_walkers)
-    mask = num_walkers_vals .== nw
-    Δτ_sub = Δτ_vals[mask]
-    E_sub  = E_norm[mask]
-    Err_sub = Error_norm[mask]
-    
-    plot!(p1, Δτ_sub, E_sub,
-          yerror   = Err_sub,
-          label    = L"N_w = %$(Int(nw))",
-          marker   = :circle,
-          markersize = 5,
-          linewidth  = 2,
-          color    = colors[idx])
+    # separate masks for each file
+    mask_lin  = num_walkers_vals_lin  .== nw
+    mask_quad = num_walkers_vals_quad .== nw
+
+    Δτ_sub_lin   = Δτ_vals_lin[mask_lin]
+    E_sub_lin    = E_norm_lin[mask_lin]
+    Err_sub_lin  = Error_norm_lin[mask_lin]    # ← was Error_norm_quad
+
+    Δτ_sub_quad  = Δτ_vals_quad[mask_quad]
+    E_sub_quad   = E_norm_quad[mask_quad]
+    Err_sub_quad = Error_norm_quad[mask_quad]
+
+    plot!(p1, Δτ_sub_lin, E_sub_lin;
+          yerror = Err_sub_lin,
+          label  = L"N_w = %$(Int(nw)) \; \mathrm{linear}",
+          marker = :circle, markersize = 5, linewidth = 2,
+          color  = colors[idx])
+
+    plot!(p1, Δτ_sub_quad, E_sub_quad;
+          yerror    = Err_sub_quad,
+          label     = L"N_w = %$(Int(nw)) \; \mathrm{quadratic}",
+          marker    = :square, markersize = 5, linewidth = 2,
+          color     = colors[idx+1], linestyle = :dash)
 end
 
 hline!(p1, [(E_vmc - Error_E_vmc) / nr0_sq_32,

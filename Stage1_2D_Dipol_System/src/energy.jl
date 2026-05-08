@@ -129,8 +129,8 @@ function energy_estimators(xcoord::Vector{Float64}, ycoord::Vector{Float64},
                 dx = get_periodic_difference(xcoord[k], xcoord[i], L)
                 dy = get_periodic_difference(ycoord[k], ycoord[i], L)
                 r  = sqrt(dx^2 + dy^2)
-
-                if r > 1e-10
+                
+                if r > 1e-4
                     # Compute ONCE per pair
                     du_dr   = u2_first_derivative(r, R_match, L, Constants)
                     d2u_dr2 = u2_second_derivative(r, R_match, L, Constants)

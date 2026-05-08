@@ -46,8 +46,8 @@ println("Loaded VMC final config from file")
 ## Loop over different number of walkers
 num_walkers_vals = [200]
 ## Loop over different time steps
-Δτ_vals = [0.01, 0.009, 0.008, 0.007, 0.006, 0.005, 0.004, 0.003, 0.002, 0.001, 0.0009, 0.0008, 0.0007, 0.0006, 0.0005, 0.0004, 0.0003, 0.0002, 0.0001, 0.00009, 0.00008, 0.00007, 0.00006, 0.00005, 0.00004, 0.00003, 0.00002, 0.00001]
-num_steps_dmc = 10^5
+Δτ_vals = [1e-5]
+num_steps_dmc = 10^6
 
 # Define the path where results will be saved
 results_path = joinpath(@__DIR__, "..", "data", "results", "DMC",
@@ -63,7 +63,8 @@ open(results_path, "w") do io
         num_target = num_walkers 
         
         for Δτ in Δτ_vals
-            println("\nRunning DMC with num_walkers = $num_walkers and Δτ = $Δτ")
+
+            println("\nRunning DMC with num_walkers = $num_walkers, Δτ = $Δτ and num_steps = $num_steps_dmc...")
             
             # Run DMC, ensuring plot_energy is false to prevent execution pausing
             E_dmc, E_dmc_err, E_history = dmc(x_init, y_init,
