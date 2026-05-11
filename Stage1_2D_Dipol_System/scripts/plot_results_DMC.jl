@@ -1,4 +1,4 @@
-using DelimitedFiles, Plots, LaTeXStrings
+using DelimitedFiles, Plots, LaTeXStrings, Polynomials
 
 ENV["PATH"] = "C:\\Users\\marta\\AppData\\Local\\Programs\\MiKTeX\\miktex\\bin\\x64;" * ENV["PATH"]
 # pgfplotsx()
@@ -17,18 +17,8 @@ else
 end 
 
 # Load data Linear DMC
-dmc_path_lin_no_branc = joinpath(@__DIR__, "..", "data", "results", "DMC",
-           "dmc_N$(num_part)_nr0sq$(nr0_sq)_linear_no_branching.txt")
-dmc_data_lin_no_branc = readdlm(dmc_path_lin_no_branc, '\t', Float64, skipstart=1)
-
-num_walkers_vals_lin_no_branc = dmc_data_lin_no_branc[:, 1]
-Δτ_vals_lin_no_branc          = dmc_data_lin_no_branc[:, 2]
-E_dmc_lin_no_branc            = dmc_data_lin_no_branc[:, 3]
-Error_E_dmc_lin_no_branc      = dmc_data_lin_no_branc[:, 4]
-
-# Load data Linear DMC
 dmc_path_lin = joinpath(@__DIR__, "..", "data", "results", "DMC",
-           "dmc_N$(num_part)_nr0sq$(nr0_sq)_linear.txt")
+           "dmc_N$(num_part)_nr0sq$(nr0_sq)_linear_no_branching.txt")
 dmc_data_lin = readdlm(dmc_path_lin, '\t', Float64, skipstart=1)
 
 num_walkers_vals_lin = dmc_data_lin[:, 1]
@@ -36,25 +26,35 @@ num_walkers_vals_lin = dmc_data_lin[:, 1]
 E_dmc_lin            = dmc_data_lin[:, 3]
 Error_E_dmc_lin      = dmc_data_lin[:, 4]
 
-#Load data Quadratic DMC
-dmc_path_quad_no_branc = joinpath(@__DIR__, "..", "data", "results", "DMC",
-              "dmc_N$(num_part)_nr0sq$(nr0_sq)_quadratic_no_branching.txt")
-dmc_data_quad_no_branc = readdlm(dmc_path_quad_no_branc, '\t', Float64, skipstart=1)
+# # Load data Linear DMC
+# dmc_path_lin = joinpath(@__DIR__, "..", "data", "results", "DMC",
+#            "dmc_N$(num_part)_nr0sq$(nr0_sq)_linear.txt")
+# dmc_data_lin = readdlm(dmc_path_lin, '\t', Float64, skipstart=1)
 
-num_walkers_vals_quad_no_branc = dmc_data_quad_no_branc[:, 1]
-Δτ_vals_quad_no_branc          = dmc_data_quad_no_branc[:, 2]
-E_dmc_quad_no_branc            = dmc_data_quad_no_branc[:, 3]
-Error_E_dmc_quad_no_branc      = dmc_data_quad_no_branc[:, 4]
+# num_walkers_vals_lin = dmc_data_lin[:, 1]
+# Δτ_vals_lin          = dmc_data_lin[:, 2]
+# E_dmc_lin            = dmc_data_lin[:, 3]
+# Error_E_dmc_lin      = dmc_data_lin[:, 4]
 
 #Load data Quadratic DMC
 dmc_path_quad = joinpath(@__DIR__, "..", "data", "results", "DMC",
-              "dmc_N$(num_part)_nr0sq$(nr0_sq)_quadratic.txt")
+              "dmc_N$(num_part)_nr0sq$(nr0_sq)_quadratic_no_branching.txt")
 dmc_data_quad = readdlm(dmc_path_quad, '\t', Float64, skipstart=1)
 
 num_walkers_vals_quad = dmc_data_quad[:, 1]
-Δτ_vals_quad          = dmc_data_quad[:, 2]
-E_dmc_quad            = dmc_data_quad[:, 3]
-Error_E_dmc_quad      = dmc_data_quad[:, 4]
+Δτ_vals_quad = dmc_data_quad[:, 2]
+E_dmc_quad = dmc_data_quad[:, 3]
+Error_E_dmc_quad = dmc_data_quad[:, 4]
+
+# #Load data Quadratic DMC
+# dmc_path_quad = joinpath(@__DIR__, "..", "data", "results", "DMC",
+#               "dmc_N$(num_part)_nr0sq$(nr0_sq)_quadratic.txt")
+# dmc_data_quad = readdlm(dmc_path_quad, '\t', Float64, skipstart=1)
+
+# num_walkers_vals_quad = dmc_data_quad[:, 1]
+# Δτ_vals_quad          = dmc_data_quad[:, 2]
+# E_dmc_quad            = dmc_data_quad[:, 3]
+# Error_E_dmc_quad      = dmc_data_quad[:, 4]
 
 
 #Load data VMC
@@ -88,41 +88,77 @@ p1 = plot(
     framestyle = :box,
     grid    = true,
     gridalpha = 0.3,
-    xlim = (1e-5, 1e-3),
-    ylim = (5.64, 5.69)
+    xscale  = :log10,
+    yscale  = :log10
 )
 
 for (idx, nw) in enumerate(unique_walkers)
-    # separate masks for each file
-    mask_lin  = num_walkers_vals_lin  .== nw
-    mask_quad = num_walkers_vals_quad .== nw
+    mask_lin  = (num_walkers_vals_lin  .== nw) .& (Δτ_vals_lin  .>= 1e-5) .& (Δτ_vals_lin  .<= 1e-3)
+    mask_quad = (num_walkers_vals_quad .== nw) .& (Δτ_vals_quad .>= 1e-5) .& (Δτ_vals_quad .<= 1e-3)
 
-    Δτ_sub_lin   = Δτ_vals_lin[mask_lin]
-    E_sub_lin    = E_norm_lin[mask_lin]
-    Err_sub_lin  = Error_norm_lin[mask_lin]    # ← was Error_norm_quad
+    Δτ_sub_lin  = Δτ_vals_lin[mask_lin]
+    E_sub_lin   = E_norm_lin[mask_lin]
+    err_sub_lin = Error_norm_lin[mask_lin]
 
-    Δτ_sub_quad  = Δτ_vals_quad[mask_quad]
-    E_sub_quad   = E_norm_quad[mask_quad]
-    Err_sub_quad = Error_norm_quad[mask_quad]
+    Δτ_sub_quad = Δτ_vals_quad[mask_quad]
+    E_sub_quad  = E_norm_quad[mask_quad]
+    err_sub_quad = Error_norm_quad[mask_quad]
 
-    plot!(p1, Δτ_sub_lin, E_sub_lin;
-          label = "Nw = $(Int(nw)) linear",
-          marker = :circle, markersize = 5, linewidth = 2,
-          color  = colors[idx])
+    # Data points
+    # plot!(p1, Δτ_sub_lin, err_sub_lin;
+    #       label = "Nw = $(Int(nw)) linear",
+    #       marker = :circle, markersize = 5, linewidth = 2,
+    #       color  = colors[idx])
 
-    plot!(p1, Δτ_sub_quad, E_sub_quad;
-          label = "Nw = $(Int(nw)) quadratic",
-          marker    = :square, markersize = 5, linewidth = 2,
-          color     = colors[idx+1], linestyle = :dash)
+    # plot!(p1, Δτ_sub_quad, err_sub_quad;
+    #       label = "Nw = $(Int(nw)) quadratic",
+    #       marker    = :square, markersize = 5, linewidth = 2,
+    #       color     = colors[idx+1], linestyle = :dash)
+
+    # Linear fit to linear DMC:  E = a₀ + a₁Δτ
+    fit_lin  = fit(Δτ_sub_lin,  E_sub_lin,  1)
+
+    # Quadratic fit to quadratic DMC:  E = b₀ + b₁Δτ + b₂(Δτ)²
+    fit_quad = fit(Δτ_sub_quad, E_sub_quad, 2)
+
+    Δτ_range = range(0, maximum(Δτ_sub_lin), length=200)
+
+    # plot!(p1, Δτ_range, fit_lin.(Δτ_range);
+    #       linestyle = :solid, color = "green",   label = "")
+    # plot!(p1, Δτ_range, fit_quad.(Δτ_range);
+    #       linestyle = :solid, color = "orange", label = "")
+
+    # Mark extrapolated values at Δτ = 0
+    E0_lin  = fit_lin(0.0)
+    E0_quad = fit_quad(0.0)
+
+    bias_lin = abs.(E0_lin  .- E_sub_lin)
+    bias_quad = abs.(E0_quad .- E_sub_quad)
+
+    plot!(p1,  Δτ_sub_lin, bias_lin;
+          color  = "green", label = "E₀ lin  = $(round(E0_lin,  digits=5))")
+    plot!(p1, Δτ_sub_quad, bias_quad;
+          color  = "orange", label = "E₀ quad = $(round(E0_quad, digits=5))")
+
+    Δτ_ref = exp10.(range(-5, -3, length=50))
+    plot!(Δτ_ref, 20   .* Δτ_ref;     label="slope 1", linestyle=:dash, color=:black, lw=2)
+    plot!(Δτ_ref, 2e4  .* Δτ_ref.^2;  label="slope 2", linestyle=:dot,  color=:gray,  lw=2)
+
+    # scatter!(p1, [0.0], [E0_lin];
+    #          marker = :star5, markersize = 10,
+    #          color  = "red",   label = "E₀ lin  = $(round(E0_lin,  digits=5))")
+    # scatter!(p1, [0.0], [E0_quad];
+    #          marker = :star5, markersize = 10,
+    #          color  = "orange", label = "E₀ quad = $(round(E0_quad, digits=5))")
 end
 
-hline!(p1, [(E_vmc - Error_E_vmc) / nr0_sq_32,
-            (E_vmc + Error_E_vmc) / nr0_sq_32];
-       label     = "",
-       linestyle = :dot,
-       linewidth = 1,
-       color     = :red,
-       alpha     = 0.5)
+# hline!(p1, [(E_vmc - Error_E_vmc) / nr0_sq_32,
+#             (E_vmc + Error_E_vmc) / nr0_sq_32];
+#        label     = "",
+#        linestyle = :dot,
+#        linewidth = 1,
+#        color     = "red",
+#        alpha     = 0.5)
 
 savefig(p1, joinpath(@__DIR__, "..", "data", "plots", "DMC", "dmc_E_vs_dtau_N$(num_part)_nr0sq$(nr0_sq).pdf"))
 println("Saved Plot 1")

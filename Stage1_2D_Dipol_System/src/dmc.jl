@@ -118,25 +118,36 @@ function dmc(x_init::Vector{Float64}, y_init::Vector{Float64},
         end
 
         if quadratic
-            @threads for i in 1:n
-            # Drift Δτ/2 at old position
-            x_d = wrap_position.(x_walkers[i] .+ drift_x_old[i] .* (Δτ/2), L)
-            y_d = wrap_position.(y_walkers[i] .+ drift_y_old[i] .* (Δτ/2), L)
+            @threads for i in 1:n        
+                # ── First half-drift: ──────────────────────────────────────
+                x1 = wrap_position.(x_walkers[i] .+ drift_x_old[i] .* (Δτ/2), L)
+                y1 = wrap_position.(y_walkers[i] .+ drift_y_old[i] .* (Δτ/2), L)
 
-            # Diffusion
-            x_d, y_d = diffusion_step(x_d, y_d, L, D, Δτ)
+                F1x, F1y, _, _, _, _, _ = energy_estimators(x1, y1, L, R_match, Constants)
 
-            # Forces at post-diffusion — needed for second half-drift only, not cached
-            dx_mid, dy_mid, _, _, _, _, _ = energy_estimators(x_d, y_d, L, R_match, Constants)
+                x_d = wrap_position.(x_walkers[i] .+ 0.5*(drift_x_old[i] .+ F1x) .* (Δτ/2), L)
+                y_d = wrap_position.(y_walkers[i] .+ 0.5*(drift_y_old[i] .+ F1y) .* (Δτ/2), L)
 
-            # Drift Δτ/2 → final position
-            new_x[i] = wrap_position.(x_d .+ dx_mid .* (Δτ/2), L)
-            new_y[i] = wrap_position.(y_d .+ dy_mid .* (Δτ/2), L)
+                # ── Diffusion ───────────────────────────────────────────────────
+                x_d, y_d = diffusion_step(x_d, y_d, L, D, Δτ)
 
-            # Forces AND energy at final position — cached for next step
-            drift_x_new[i], drift_y_new[i], E_loc_new[i], _, _, _, _ = energy_estimators(
-                new_x[i], new_y[i], L, R_match, Constants)
-        end
+                # ── Second half-drift:  ─────────────────────────────────────
+
+                dx_mid, dy_mid, _, _, _, _, _ = energy_estimators(x_d, y_d, L, R_match, Constants)
+
+                x2 = wrap_position.(x_d .+ dx_mid .* (Δτ/2), L)
+                y2 = wrap_position.(y_d .+ dy_mid .* (Δτ/2), L)
+
+                F2x, F2y, _, _, _, _, _ = energy_estimators(x2, y2, L, R_match, Constants)
+
+                new_x[i] = wrap_position.(x_d .+ 0.5*(dx_mid .+ F2x) .* (Δτ/2), L)
+                new_y[i] = wrap_position.(y_d .+ 0.5*(dy_mid .+ F2y) .* (Δτ/2), L)
+
+                # ── Forces + energy at final position — cached ─────────
+                drift_x_new[i], drift_y_new[i], E_loc_new[i], _, _, _, _ = energy_estimators(
+                    new_x[i], new_y[i], L, R_match, Constants)
+            end
+
             x_walkers   = new_x[1:n]
             y_walkers   = new_y[1:n]
             drift_x_old = drift_x_new[1:n]
