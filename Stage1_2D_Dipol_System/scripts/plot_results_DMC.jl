@@ -84,12 +84,11 @@ p1 = plot(
     xlabel  = L"\Delta\tau",
     ylabel  = L"E/N \cdot (nr_0^2)^{-3/2}",
     title   = L"DMC\ \mathrm{Energy\ vs}\ \Delta\tau,\ N=30,\ nr_0^2=16",
-    legend  = :topleft,
+    legend  = :bottomleft,
     framestyle = :box,
     grid    = true,
     gridalpha = 0.3,
-    xscale  = :log10,
-    yscale  = :log10
+    xlim = (0.0, 1e-3)
 )
 
 for (idx, nw) in enumerate(unique_walkers)
@@ -105,15 +104,13 @@ for (idx, nw) in enumerate(unique_walkers)
     err_sub_quad = Error_norm_quad[mask_quad]
 
     # Data points
-    # plot!(p1, Δτ_sub_lin, err_sub_lin;
-    #       label = "Nw = $(Int(nw)) linear",
-    #       marker = :circle, markersize = 5, linewidth = 2,
-    #       color  = colors[idx])
+    plot!(p1, Δτ_sub_lin, E_sub_lin;
+          label = L"N_w = " * string(Int(nw)) * L" \mathrm{ linear}",
+          marker = :circle, markersize = 4, linewidth = 2, linestyle = :dash)
 
-    # plot!(p1, Δτ_sub_quad, err_sub_quad;
-    #       label = "Nw = $(Int(nw)) quadratic",
-    #       marker    = :square, markersize = 5, linewidth = 2,
-    #       color     = colors[idx+1], linestyle = :dash)
+    plot!(p1, Δτ_sub_quad, E_sub_quad;
+          label = L"N_w = " * string(Int(nw)) * L" \mathrm{ quadratic}",
+          marker    = :diamond, markersize = 4, linewidth = 2, linestyle = :dash)
 
     # Linear fit to linear DMC:  E = a₀ + a₁Δτ
     fit_lin  = fit(Δτ_sub_lin,  E_sub_lin,  1)
@@ -123,10 +120,10 @@ for (idx, nw) in enumerate(unique_walkers)
 
     Δτ_range = range(0, maximum(Δτ_sub_lin), length=200)
 
-    # plot!(p1, Δτ_range, fit_lin.(Δτ_range);
-    #       linestyle = :solid, color = "green",   label = "")
-    # plot!(p1, Δτ_range, fit_quad.(Δτ_range);
-    #       linestyle = :solid, color = "orange", label = "")
+    plot!(p1, Δτ_range, fit_lin.(Δτ_range);
+          linestyle = :solid,   label = "")
+    plot!(p1, Δτ_range, fit_quad.(Δτ_range);
+          linestyle = :solid, label = "")
 
     # Mark extrapolated values at Δτ = 0
     E0_lin  = fit_lin(0.0)
@@ -135,30 +132,27 @@ for (idx, nw) in enumerate(unique_walkers)
     bias_lin = abs.(E0_lin  .- E_sub_lin)
     bias_quad = abs.(E0_quad .- E_sub_quad)
 
-    plot!(p1,  Δτ_sub_lin, bias_lin;
-          color  = "green", label = "E₀ lin  = $(round(E0_lin,  digits=5))")
-    plot!(p1, Δτ_sub_quad, bias_quad;
-          color  = "orange", label = "E₀ quad = $(round(E0_quad, digits=5))")
+    # plot!(p1,  Δτ_sub_lin, bias_lin;
+    #       color  = "green", label = "E₀ lin  = $(round(E0_lin,  digits=5))")
+    # plot!(p1, Δτ_sub_quad, bias_quad;
+    #       color  = "orange", label = "E₀ quad = $(round(E0_quad, digits=5))")
 
-    Δτ_ref = exp10.(range(-5, -3, length=50))
-    plot!(Δτ_ref, 20   .* Δτ_ref;     label="slope 1", linestyle=:dash, color=:black, lw=2)
-    plot!(Δτ_ref, 2e4  .* Δτ_ref.^2;  label="slope 2", linestyle=:dot,  color=:gray,  lw=2)
+    # Δτ_ref = exp10.(range(-5, -3, length=50))
+    # plot!(Δτ_ref, 20   .* Δτ_ref;     label="slope 1", linestyle=:dash, color=:black, lw=2)
+    # plot!(Δτ_ref, 2e4  .* Δτ_ref.^2;  label="slope 2", linestyle=:dot,  color=:gray,  lw=2)
 
-    # scatter!(p1, [0.0], [E0_lin];
-    #          marker = :star5, markersize = 10,
-    #          color  = "red",   label = "E₀ lin  = $(round(E0_lin,  digits=5))")
-    # scatter!(p1, [0.0], [E0_quad];
-    #          marker = :star5, markersize = 10,
-    #          color  = "orange", label = "E₀ quad = $(round(E0_quad, digits=5))")
+    scatter!(p1, [0.0], [E0_lin];
+             marker = :star5, markersize = 10,   label = "E₀ lin  = $(round(E0_lin,  digits=5))")
+    scatter!(p1, [0.0], [E0_quad];
+             marker = :star5, markersize = 10, label = "E₀ quad = $(round(E0_quad, digits=5))")
 end
 
-# hline!(p1, [(E_vmc - Error_E_vmc) / nr0_sq_32,
-#             (E_vmc + Error_E_vmc) / nr0_sq_32];
-#        label     = "",
-#        linestyle = :dot,
-#        linewidth = 1,
-#        color     = "red",
-#        alpha     = 0.5)
+hline!(p1, [(E_vmc - Error_E_vmc) / nr0_sq_32,
+            (E_vmc + Error_E_vmc) / nr0_sq_32];
+       linestyle = :dot,
+       linewidth = 1,
+       color     = "red",
+       alpha     = 0.5, label = "VMC E ± error = $(5.6651) ± $(0.0003)")
 
 savefig(p1, joinpath(@__DIR__, "..", "data", "plots", "DMC", "dmc_E_vs_dtau_N$(num_part)_nr0sq$(nr0_sq).pdf"))
 println("Saved Plot 1")
