@@ -81,14 +81,12 @@ colors         = palette(:viridis, length(unique_walkers)+1)
 # Plot 1: Energy vs Δτ for each num_walkers
 # ------------------------------------------
 p1 = plot(
-    xlabel  = L"\Delta\tau",
-    ylabel  = L"E/N \cdot (nr_0^2)^{-3/2}",
-    title   = L"DMC\ \mathrm{Energy\ vs}\ \Delta\tau,\ N=30,\ nr_0^2=16",
+    xlabel  = L"$\Delta\tau$",
+    ylabel  = L"$E/N \cdot (nr_0^2)^{-3/2}$",
+    title   = L"$\mathrm{DMC\ Energy\ vs}\ \Delta\tau,\ N=30,\ nr_0^2=16$",
     legend  = :bottomleft,
     framestyle = :box,
-    grid    = true,
-    gridalpha = 0.3,
-    xlim = (0.0, 1e-3)
+    tickfontfamily="Computer Modern"
 )
 
 for (idx, nw) in enumerate(unique_walkers)
@@ -105,12 +103,22 @@ for (idx, nw) in enumerate(unique_walkers)
 
     # Data points
     plot!(p1, Δτ_sub_lin, E_sub_lin;
-          label = L"N_w = " * string(Int(nw)) * L" \mathrm{ linear}",
-          marker = :circle, markersize = 4, linewidth = 2, linestyle = :dash)
+      label = L"$N_w = %$nw\ \mathrm{(linear)}$",
+      color = :royalblue, 
+      alpha = 0.7, 
+      linestyle = :dashdot, # Distinct from the fit line
+      marker = :circle, 
+      markersize = 5, 
+      markerstrokewidth = 0.5)
 
     plot!(p1, Δτ_sub_quad, E_sub_quad;
-          label = L"N_w = " * string(Int(nw)) * L" \mathrm{ quadratic}",
-          marker    = :diamond, markersize = 4, linewidth = 2, linestyle = :dash)
+      label = L"$N_w = %$nw\ \mathrm{(quadratic)}$",
+      color = :chocolate, 
+      linewidth = 2, 
+      marker = :diamond, 
+      markersize = 6,
+      markerstrokewidth = 0.5,
+      linestyle = :dash)
 
     # Linear fit to linear DMC:  E = a₀ + a₁Δτ
     fit_lin  = fit(Δτ_sub_lin,  E_sub_lin,  1)
@@ -120,10 +128,21 @@ for (idx, nw) in enumerate(unique_walkers)
 
     Δτ_range = range(0, maximum(Δτ_sub_lin), length=200)
 
+    # 1. Fit for Linear (Match the RoyalBlue of the dots)
     plot!(p1, Δτ_range, fit_lin.(Δτ_range);
-          linestyle = :solid,   label = "")
+        linestyle = :solid, 
+        linewidth = 1.5,
+        alpha = 0.4,       # Slightly transparent so it doesn't hide the points
+        color = :royalblue, 
+        label = "") 
+
+    # 2. Fit for Quadratic (Match the Chocolate of the diamonds)
     plot!(p1, Δτ_range, fit_quad.(Δτ_range);
-          linestyle = :solid, label = "")
+        linestyle = :solid, 
+        linewidth = 2,
+        alpha = 0.6,
+        color = :chocolate, 
+        label = "")
 
     # Mark extrapolated values at Δτ = 0
     E0_lin  = fit_lin(0.0)
@@ -142,17 +161,23 @@ for (idx, nw) in enumerate(unique_walkers)
     # plot!(Δτ_ref, 2e4  .* Δτ_ref.^2;  label="slope 2", linestyle=:dot,  color=:gray,  lw=2)
 
     scatter!(p1, [0.0], [E0_lin];
-             marker = :star5, markersize = 10,   label = "E₀ lin  = $(round(E0_lin,  digits=5))")
-    scatter!(p1, [0.0], [E0_quad];
-             marker = :star5, markersize = 10, label = "E₀ quad = $(round(E0_quad, digits=5))")
-end
+         marker = :star5, markersize = 12, color = :royalblue,
+         label = L"$E_0\mathrm{(lin)} = %$(round(E0_lin, digits=5))$")
 
-hline!(p1, [(E_vmc - Error_E_vmc) / nr0_sq_32,
-            (E_vmc + Error_E_vmc) / nr0_sq_32];
-       linestyle = :dot,
-       linewidth = 1,
-       color     = "red",
-       alpha     = 0.5, label = "VMC E ± error = $(5.6651) ± $(0.0003)")
+    scatter!(p1, [0.0], [E0_quad];
+         marker = :star5, markersize = 12, color = :chocolate,
+         label = L"$E_0\mathrm{(quad)} = %$(round(E0_quad, digits=5))$")
+end
+vmc_val = round(E_vmc / nr0_sq_32, digits=4)
+vmc_err = round(Error_E_vmc / nr0_sq_32, digits=4)
+
+# Fix: Ensure all three lines are normalized by nr0_sq_32
+hline!(p1, [(E_vmc - Error_E_vmc)/nr0_sq_32, (E_vmc/nr0_sq_32), (E_vmc + Error_E_vmc)/nr0_sq_32];
+       label = [L"$E_{\mathrm{VMC}} = %$vmc_val \pm %$vmc_err$" "" ""], 
+       linestyle = :dot, 
+       linewidth = 1.2,
+       color = :black,
+       alpha = 0.6)
 
 savefig(p1, joinpath(@__DIR__, "..", "data", "plots", "DMC", "dmc_E_vs_dtau_N$(num_part)_nr0sq$(nr0_sq).pdf"))
 println("Saved Plot 1")
