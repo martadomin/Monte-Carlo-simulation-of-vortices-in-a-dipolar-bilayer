@@ -62,7 +62,8 @@ function branching_step(weights::Vector{Float64})::Vector{Int}
 end
 
 function population_control(num_walkers::Int, num_target::Int, avg_E_loc::Float64, Δτ::Float64)::Float64
-    return avg_E_loc - (1 / Δτ) * log(num_walkers / num_target)
+    α = 0.1
+    return avg_E_loc - (α / Δτ) * log(num_walkers / num_target)
 end
 
 function dmc(x_init::Vector{Float64}, y_init::Vector{Float64},
@@ -159,10 +160,10 @@ function dmc(x_init::Vector{Float64}, y_init::Vector{Float64},
                 @warn "Average local energy is NaN at step $step. Setting avg_E to E_ref_initial to prevent divergence."
             end
 
-            # # 5. Weights update
-            # for i in 1:n
-            #     weights[i] *= weight_update(E_loc_old[i], E_loc_new[i], E_ref, Δτ)
-            # end
+            # 5. Weights update
+            for i in 1:n
+                weights[i] *= weight_update(E_loc_old[i], E_loc_new[i], E_ref, Δτ)
+            end
 
         else
             @threads for i in 1:n
@@ -188,39 +189,45 @@ function dmc(x_init::Vector{Float64}, y_init::Vector{Float64},
                 @warn "Average local energy is NaN at step $step. Setting avg_E to E_ref_initial to prevent divergence."
             end
 
-            # # 5. Weights update
-            # for i in 1:n
-            #     weights[i] *= weight_update(E_loc_old[i], E_loc_new[i], E_ref, Δτ)
-            # end
+            # 5. Weights update
+            for i in 1:n
+                weights[i] *= weight_update(E_loc_old[i], E_loc_new[i], E_ref, Δτ)
+            end
         end
         
 
-        # # 6. Branching
-        # num_copies = branching_step(weights[1:n])
+        # 6. Branching
+        num_copies = branching_step(weights[1:n])
 
-        # new_x_b     = Vector{Vector{Float64}}()
-        # new_y_b     = Vector{Vector{Float64}}()
-        # new_dx      = Vector{Vector{Float64}}()
-        # new_dy      = Vector{Vector{Float64}}()
-        # E_loc_old_b = Float64[]
+        new_x_b     = Vector{Vector{Float64}}()
+        new_y_b     = Vector{Vector{Float64}}()
+        new_dx      = Vector{Vector{Float64}}()
+        new_dy      = Vector{Vector{Float64}}()
+        E_loc_old_b = Float64[]
 
-        # for i in 1:n
+        for i in 1:n
         
-        #     for _ in 1:num_copies[i]
-        #         push!(new_x_b, copy(x_walkers[i]))
-        #         push!(new_y_b, copy(y_walkers[i]))
-        #         push!(new_dx,  copy(drift_x_old[i]))
-        #         push!(new_dy,  copy(drift_y_old[i]))
-        #         push!(E_loc_old_b, E_loc_new[i])
-        #     end
-        # end
+            for _ in 1:num_copies[i]
+                push!(new_x_b, copy(x_walkers[i]))
+                push!(new_y_b, copy(y_walkers[i]))
+                push!(new_dx,  copy(drift_x_old[i]))
+                push!(new_dy,  copy(drift_y_old[i]))
+                push!(E_loc_old_b, E_loc_new[i])
+            end
+        end
+        
+        avg_E_post = isempty(E_loc_old_b) ? NaN : mean(E_loc_old_b)
+        if isnan(avg_E_post)
+            @warn "Average local energy after branching is NaN at step $step. Setting avg_E_post to E_ref_initial to prevent divergence."
+            avg_E_post = E_ref_initial
+        end
 
-        # x_walkers   = new_x_b
-        # y_walkers   = new_y_b
-        # drift_x_old = new_dx
-        # drift_y_old = new_dy
-        # E_loc_old   = E_loc_old_b
-        # weights     = ones(Float64, length(x_walkers))
+        x_walkers   = new_x_b
+        y_walkers   = new_y_b
+        drift_x_old = new_dx
+        drift_y_old = new_dy
+        E_loc_old   = E_loc_old_b
+        weights     = ones(Float64, length(x_walkers))
 
         if isempty(x_walkers)
             @warn "All walkers died at step $step"
@@ -234,7 +241,7 @@ function dmc(x_init::Vector{Float64}, y_init::Vector{Float64},
 
         # 8. Accumulate
         if step > num_equil
-            push!(E_history, avg_E)
+            push!(E_history, avg_E_post)
         end
         push!(E_plot, avg_E)
            if step % 10000 == 0

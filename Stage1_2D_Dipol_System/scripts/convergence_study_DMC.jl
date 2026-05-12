@@ -12,7 +12,7 @@ include(normpath(joinpath(@__DIR__, "..", "src", "observables.jl")))
 num_part      = 30
 nr0_sq        = 16.0
 L             = sqrt(num_part / nr0_sq)
-quadratic     = true
+quadratic     = false
 
 if !quadratic
     type_dmc = "linear"
@@ -46,8 +46,13 @@ println("Loaded VMC final config from file")
 ## Loop over different number of walkers
 num_walkers_vals = [200]
 ## Loop over different time steps
-Δτ_vals = [3e-5, 2e-5, 1e-5]
-num_steps_dmc = 10^5
+Δτ_vals = [2e-4, 1e-4, 9e-5, 8e-5, 7e-5, 6e-5, 5e-5, 4e-5, 3e-5, 2e-5, 1e-5]
+
+if Δτ_vals == [1e-6]
+    num_steps_dmc = 5* 10^5
+else
+    num_steps_dmc = 10^5
+end
 
 # Define the path where results will be saved
 results_path = joinpath(@__DIR__, "..", "data", "results", "DMC",
