@@ -25,7 +25,7 @@ println("Loaded VMC final config from file")
 
 # Define the path where results will be saved
 results_path = joinpath(@__DIR__, "..", "data", "results", "DMC",
-           "dmc_N$(num_part)_nr0sq$(nr0_sq).txt")
+           "dmc_N$(num_part)_nr0sq$(nr0_sq)_$(type_dmc)_def.txt")
 
 # Open the file ONCE before the loop begins to write results as they finish
 open(results_path, "w") do io
@@ -41,10 +41,11 @@ open(results_path, "w") do io
             
             # Run DMC, ensuring plot_energy is false to prevent execution pausing
             E_dmc, E_dmc_err, E_history = dmc(x_init, y_init,
-                                             num_walkers, num_part, num_steps_MC,
+                                             num_walkers, num_part, num_steps_dmc,
                                              Δτ, L, R_opt, Constants,
                                              E_ref_initial, num_target,
-                                             plot_energy=false)
+                                             plot_energy=false,
+                                             quadratic=quadratic)
 
             println("\nRaw DMC result for num_walkers = $num_walkers and Δτ = $Δτ: E = $E_dmc ± $E_dmc_err")
 
