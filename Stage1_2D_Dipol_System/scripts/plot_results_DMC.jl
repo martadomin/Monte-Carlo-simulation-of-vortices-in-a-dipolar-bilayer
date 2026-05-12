@@ -9,7 +9,7 @@ nr0_sq    = 16.0
 nr0_sq_32 = num_part * nr0_sq^(3/2)
 E_tail    = 2π / sqrt(num_part)
 quadratic = false
-println(E_tail)
+num_walkers = 200
 
 if !quadratic
     type_dmc = "linear"
@@ -19,7 +19,7 @@ end
 
 # Load data Linear DMC
 dmc_path_lin = joinpath(@__DIR__, "..", "data", "results", "DMC",
-           "dmc_N$(num_part)_nr0sq$(nr0_sq)_linear_no_branching.txt")
+           "dmc_N$(num_part)_nr0sq$(nr0_sq)_Nw$(num_walkers)_linear_no_branching.txt")
 dmc_data_lin = readdlm(dmc_path_lin, '\t', Float64, skipstart=1)
 
 num_walkers_vals_lin = dmc_data_lin[:, 1]
@@ -29,7 +29,7 @@ Error_E_dmc_lin      = dmc_data_lin[:, 4]
 
 # Load data Linear DMC
 dmc_path_lin_real = joinpath(@__DIR__, "..", "data", "results", "DMC",
-           "dmc_N$(num_part)_nr0sq$(nr0_sq)_linear.txt")
+           "dmc_N$(num_part)_nr0sq$(nr0_sq)_Nw$(num_walkers)_linear.txt")
 dmc_data_lin_real = readdlm(dmc_path_lin_real, '\t', Float64, skipstart=1)
 
 num_walkers_vals_lin_real = dmc_data_lin_real[:, 1]
@@ -39,7 +39,7 @@ Error_E_dmc_lin_real      = dmc_data_lin_real[:, 4]
 
 #Load data Quadratic DMC
 dmc_path_quad = joinpath(@__DIR__, "..", "data", "results", "DMC",
-              "dmc_N$(num_part)_nr0sq$(nr0_sq)_quadratic_no_branching.txt")
+              "dmc_N$(num_part)_nr0sq$(nr0_sq)_Nw$(num_walkers)_quadratic_no_branching.txt")
 dmc_data_quad = readdlm(dmc_path_quad, '\t', Float64, skipstart=1)
 
 num_walkers_vals_quad = dmc_data_quad[:, 1]
@@ -49,7 +49,7 @@ Error_E_dmc_quad = dmc_data_quad[:, 4]
 
 #Load data Quadratic DMC
 dmc_path_quad_real = joinpath(@__DIR__, "..", "data", "results", "DMC",
-              "dmc_N$(num_part)_nr0sq$(nr0_sq)_quadratic.txt")
+              "dmc_N$(num_part)_nr0sq$(nr0_sq)_Nw$(num_walkers)_quadratic.txt")
 dmc_data_quad_real = readdlm(dmc_path_quad_real, '\t', Float64, skipstart=1)
 
 num_walkers_vals_quad_real = dmc_data_quad_real[:, 1]
@@ -79,8 +79,8 @@ Error_norm_quad_real = Error_E_dmc_quad_real ./ nr0_sq_32
 E_norm_lin_real = E_dmc_lin_real ./ nr0_sq_32
 Error_norm_lin_real = Error_E_dmc_lin_real ./ nr0_sq_32
 
-unique_walkers = sort(unique(num_walkers_vals_lin))
-unique_Δτ      = sort(unique(Δτ_vals_lin))
+unique_walkers = sort(unique(num_walkers_vals_lin_real))
+unique_Δτ      = sort(unique(Δτ_vals_lin_real))
 colors         = palette(:viridis, length(unique_walkers)+1)
 
 # ------------------------------------------
@@ -92,7 +92,9 @@ p1 = plot(
     title   = L"$\mathrm{DMC\ Energy\ vs}\ \Delta\tau,\ N=30,\ nr_0^2=16$",
     legend  = :outerright,
     framestyle = :box,
-    tickfontfamily="Computer Modern"
+    tickfontfamily="Computer Modern",
+    grid    = true,
+    dpi = 600
 )
 
 for (idx, nw) in enumerate(unique_walkers)
@@ -200,18 +202,6 @@ for (idx, nw) in enumerate(unique_walkers)
     E0_lin_real  = fit_lin_real(0.0)
     E0_quad_real = fit_quad_real(0.0)
 
-    bias_lin = abs.(E0_lin  .- E_sub_lin)
-    bias_quad = abs.(E0_quad .- E_sub_quad)
-
-    # plot!(p1,  Δτ_sub_lin, bias_lin;
-    #       color  = "green", label = "E₀ lin  = $(round(E0_lin,  digits=5))")
-    # plot!(p1, Δτ_sub_quad, bias_quad;
-    #       color  = "orange", label = "E₀ quad = $(round(E0_quad, digits=5))")
-
-    # Δτ_ref = exp10.(range(-5, -3, length=50))
-    # plot!(Δτ_ref, 20   .* Δτ_ref;     label="slope 1", linestyle=:dash, color=:black, lw=2)
-    # plot!(Δτ_ref, 2e4  .* Δτ_ref.^2;  label="slope 2", linestyle=:dot,  color=:gray,  lw=2)
-
     scatter!(p1, [0.0], [E0_lin];
          marker = :star5, markersize = 12, color = :royalblue,
          label = L"$E_0\mathrm{(lin)} = %$(round(E0_lin, digits=5))$")
@@ -241,43 +231,57 @@ hline!(p1, [(E_vmc - Error_E_vmc)/nr0_sq_32, (E_vmc/nr0_sq_32), (E_vmc + Error_E
        alpha = 0.6)
 
 savefig(p1, joinpath(@__DIR__, "..", "data", "plots", "DMC", "dmc_E_vs_dtau_N$(num_part)_nr0sq$(nr0_sq).pdf"))
+savefig(p1, joinpath(@__DIR__, "..", "data", "plots", "DMC", "dmc_E_vs_dtau_N$(num_part)_nr0sq$(nr0_sq).png"))
 println("Saved Plot 1")
 display(p1)
 
 # ------------------------------------------
 # Plot 2: Energy vs num_walkers for each Δτ
 # ------------------------------------------
+
+dmc_path_walkers = joinpath(@__DIR__, "..", "data", "results", "DMC",
+              "dmc_N$(num_part)_nr0sq$(nr0_sq)_quadratic.txt")
+dmc_data_walkers = readdlm(dmc_path_walkers, '\t', Float64, skipstart=1)
+
+num_walkers_vals_walkers = dmc_data_walkers[:, 1]
+Δτ_vals_walkers = dmc_data_walkers[:, 2]
+E_dmc_walkers = dmc_data_walkers[:, 3]
+Error_E_dmc_walkers = dmc_data_walkers[:, 4]
+
+unique_walkers = sort(unique(num_walkers_vals_walkers))
+unique_Δτ      = sort(unique(Δτ_vals_walkers))
 colors2 = palette(:plasma, length(unique_Δτ))
 
 p2 = plot(
-    xlabel  = L"N_{\mathrm{walkers}}",
+    xlabel  = L"1/N_{\mathrm{walkers}}",
     ylabel  = L"E/N \cdot (nr_0^2)^{-3/2}",
     title   = L"DMC\ \mathrm{Energy\ vs}\ N_{\mathrm{walkers}},\ N=30,\ nr_0^2=16",
     legend  = :topright,
     framestyle = :box,
     grid    = true,
     gridalpha = 0.3,
-    xscale  = :log10
+    xscale  = :log10,
+    dpi = 600
 )
 
-unique_Δτ = [1e-4]
+unique_Δτ = [5*1e-5]
 
 for (idx, dt) in enumerate(unique_Δτ)
-    mask = Δτ_vals_quad .== dt
-    nw_sub  = num_walkers_vals_quad[mask]
-    E_sub   = E_norm_quad[mask]
-    Err_sub = Error_norm_quad[mask]
+    mask = Δτ_vals_walkers .== dt
+    nw_sub  = num_walkers_vals_walkers[mask]
+    E_sub   = E_dmc_walkers[mask]
+    Err_sub = Error_E_dmc_walkers[mask]
 
-    scatter!(p2, 1 ./nw_sub, E_sub,
-          yerror   = Err_sub,
-          label = "Δτ = $(dt)",
+    plot!(p2, 1 ./nw_sub, E_sub/nr0_sq_32,
+          yerror   = Err_sub/nr0_sq_32,
           marker   = :circle,
           markersize = 5,
-          linewidth  = 0,
+          linewidth  = 1.2,
           color    = colors2[idx])
 end
 
 savefig(p2, joinpath(@__DIR__, "..", "data", "plots", "DMC", "dmc_E_vs_walkers_N$(num_part)_nr0sq$(nr0_sq).pdf"))
+savefig(p2, joinpath(@__DIR__, "..", "data", "plots", "DMC", "dmc_E_vs_walkers_N$(num_part)_nr0sq$(nr0_sq).png"))
 println("Saved Plot 2")
 display(p2)
 

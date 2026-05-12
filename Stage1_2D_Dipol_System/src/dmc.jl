@@ -191,7 +191,7 @@ function dmc(x_init::Vector{Float64}, y_init::Vector{Float64},
 
             # 5. Weights update
             for i in 1:n
-                weights[i] *= weight_update(E_loc_old[i], E_loc_new[i], E_ref, Δτ)
+                weights[i] *= weight_update(E_loc_new[i], E_loc_new[i], E_ref, Δτ)
             end
         end
         

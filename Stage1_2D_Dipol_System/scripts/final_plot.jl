@@ -7,7 +7,7 @@ error_E_vmc = Float64[]
 E_dmc = Float64[]
 error_E_dmc = Float64[]
 
-nr0_sq_vals = [16.0, 32.0, 64.0, 96.0, 128.0, 196.0]
+nr0_sq_vals = [16.0]
 num_part = 30
 L = sqrt.(num_part ./ nr0_sq_vals)
 
@@ -21,10 +21,10 @@ for nr0_sq in nr0_sq_vals
         push!(error_E_vmc, vmc_data[1, 6] / nr0_sq_32)
 
         dmc_path = joinpath(@__DIR__, "..", "data", "results", "DMC",
-           "dmc_N$(num_part)_nr0sq$(nr0_sq).txt")
+           "dmc_N$(num_part)_nr0sq$(nr0_sq)_quadratic_def.txt")
         dmc_data = readdlm(dmc_path, '\t', Float64, skipstart=1)
-        push!(E_dmc, dmc_data[1, 4] / nr0_sq_32)
-        push!(error_E_dmc, dmc_data[1, 5] / nr0_sq_32)
+        push!(E_dmc, dmc_data[1, 3] / nr0_sq_32)
+        push!(error_E_dmc, dmc_data[1, 4] / nr0_sq_32)
 end
 
 # Paper fit: E/N = a1*(nr0^2)^(3/2) + a2*(nr0^2)^(5/4) + a3*(nr0^2)^(1/2)
@@ -54,12 +54,18 @@ p2 = plot(nr0_range, E_paper_normalized,
           xticks=(xticks_vals, xticks_labels),
           yticks=(yticks_vals, yticks_labels))
 
-scatter!(nr0_sq_vals, E_vmc .+ E_tail,
-         yerror=error_E_vmc,
-         label=L"\mathrm{VMC,\ }N = %$(num_part)",
-         marker=:circle,
-         markersize=6,
-         color=:red)
+# scatter!(nr0_sq_vals, E_vmc .+ E_tail,
+#          yerror=error_E_vmc,
+#          label=L"\mathrm{VMC,\ }N = %$(num_part)",
+#          marker=:circle,
+#          markersize=6,
+#          color=:red)
+println(E_dmc .+ E_tail)
+println(E_vmc .+ E_tail)
+
+nr0 = 16.0
+println((a1*nr0^(3/2) + a2*nr0^(5/4) + a3*nr0^(1/2)) / nr0^(3/2))
+
 scatter!(nr0_sq_vals, E_dmc .+ E_tail,
          yerror=error_E_dmc,
          label=L"\mathrm{DMC\ results,\ }N = %$(num_part)",
