@@ -17,6 +17,12 @@ function move_one_part(x_coord::Vector{Float64}, y_coord::Vector{Float64}, delta
     return id, x_coord_new, y_coord_new
 end
 
+function move_all_part(x_coord, y_coord, delta, L)
+    x_new = wrap_position.(x_coord .+ randn(length(x_coord)) .* delta, L)
+    y_new = wrap_position.(y_coord .+ randn(length(y_coord)) .* delta, L)
+    return x_new, y_new
+end
+
 function compute_logΨ(xcoord::Vector{Float64}, ycoord::Vector{Float64}, R_match::Float64, L::Float64, Constants::Tuple{Float64, Float64, Float64})::Float64
     logΨ = 0.0
     num_part = length(xcoord)
@@ -133,7 +139,8 @@ function metropolis(
     final_energy_plot::Bool = false,
     plot_every::Int = 100,
     progress::Bool = true,
-    num_bins::Int = 100
+    num_bins::Int = 100,
+    move_all::Bool = false
     )::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}}
 
     acceptance_ratio = 0.0
@@ -173,19 +180,30 @@ function metropolis(
         progress_bar = Progress(num_steps; desc="Running Metropolis $num_part...", showspeed=true)
     end
 
+    logΨ_current =  move_all ? compute_logΨ(x_coord, y_coord, R_match, L, Constants) : 0.0
+
     for i in 1:num_steps
         if progress == true
             next!(progress_bar)
         end
 
-        moved_id, x_new, y_new = move_one_part(x_coord, y_coord, delta, L)
+        if move_all == true
+            x_new, y_new = move_all_part(x_coord, y_coord, delta, L)
+            logΨ_new = compute_logΨ(x_new, y_new, R_match, L, Constants)
+            ΔlogΨ = 2* (logΨ_new - logΨ_current)
+        else
+            moved_id, x_new, y_new = move_one_part(x_coord, y_coord, delta, L)
+            ΔlogΨ = 2 * compute_ΔlogΨ(x_coord, y_coord, x_new, y_new, R_match, L, Constants, moved_id)
+        end
 
-        ΔlogΨ = compute_ΔlogΨ(x_coord, y_coord, x_new, y_new, R_match, L, Constants, moved_id)
-
-        if log(rand()) < 2 * ΔlogΨ
+        if log(rand()) < ΔlogΨ
             x_coord = x_new
             y_coord = y_new
             acceptance_ratio += 1
+
+            if move_all
+                logΨ_current = logΨ_new
+            end
 
             _, _, E_local, E_local_drift, E_local_laplacian, E_kinetic, E_potential = energy_estimators(x_coord, y_coord, L, R_match, Constants)
         end
@@ -213,7 +231,6 @@ function metropolis(
                 push!(step_plot, i)
                 push!(energy_plot, E_local_drift / num_part)
             end
-
             accumulate_gr!(g_r, x_coord, y_coord, L)
             n_gr_samples += 1
         end
@@ -253,6 +270,6 @@ function metropolis(
             acceptance_ratio / num_steps,
             r_vals, 
             g_r_normalized,
-            x_coord, #Save final configuration
+            x_coord,
             y_coord
 end

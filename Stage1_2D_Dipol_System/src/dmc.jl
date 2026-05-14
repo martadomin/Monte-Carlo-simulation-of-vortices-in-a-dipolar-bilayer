@@ -62,7 +62,7 @@ function branching_step(weights::Vector{Float64})::Vector{Int}
 end
 
 function population_control(num_walkers::Int, num_target::Int, avg_E_loc::Float64, Δτ::Float64)::Float64
-    α = 0.1
+    α = 1
     return avg_E_loc - (α / Δτ) * log(num_walkers / num_target)
 end
 
