@@ -234,10 +234,8 @@ function dmc(x_init::Vector{Float64}, y_init::Vector{Float64},
             break
         end
 
-        # 7. Population control, with a 10% tolerance to prevent over-correction
-        if abs(length(x_walkers)- num_target)/ num_target > 0.10
-            E_ref = population_control(length(x_walkers), num_target, avg_E, Δτ)
-        end
+        # 7. Population control
+        E_ref = population_control(length(x_walkers), num_target, avg_E, Δτ)
 
         # 8. Accumulate
         if step > num_equil

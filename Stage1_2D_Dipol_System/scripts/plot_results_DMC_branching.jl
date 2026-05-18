@@ -35,7 +35,7 @@ col_quad      = "#D55E00"
 col_quad_real = "#E69F00"
 
 num_part    = 30
-nr0_sq      = 32.0
+nr0_sq      =  16.0
 nr0_sq_32   = num_part * nr0_sq^(3/2)
 num_walkers = 200
 
@@ -45,8 +45,8 @@ function load_dmc(filename)
     return d[:,1], d[:,2], d[:,3], d[:,4]
 end
 
-_, dt_lr, E_lr, err_lr = load_dmc("dmc_N$(num_part)_nr0sq$(nr0_sq)_linear.txt")
-_, dt_qr, E_qr, err_qr = load_dmc("dmc_N$(num_part)_nr0sq$(nr0_sq)_quadratic.txt")
+_, dt_lr, E_lr, err_lr = load_dmc("dmc_N$(num_part)_nr0sq$(nr0_sq)_Nw$(num_walkers)_linear.txt")
+_, dt_qr, E_qr, err_qr = load_dmc("dmc_N$(num_part)_nr0sq$(nr0_sq)_Nw$(num_walkers)_quadratic.txt")
 
 vmc_data  = readdlm(joinpath(@__DIR__, "..", "data", "results", "VMC",
                     "vmc_N$(num_part)_nr0sq$(nr0_sq).txt"), '\t', Float64, skipstart=1)
@@ -58,7 +58,7 @@ E_lr  ./= nr0_sq_32;  err_lr ./= nr0_sq_32
 E_qr  ./= nr0_sq_32;  err_qr ./= nr0_sq_32
 
 # Δτ mask
-lo, hi = 1e-5, 1e-3
+lo, hi = 1e-7, 1e-3
 mask(dt) = (dt .>= lo) .& (dt .<= hi)
 mlr = mask(dt_lr)
 mqr = mask(dt_qr)
