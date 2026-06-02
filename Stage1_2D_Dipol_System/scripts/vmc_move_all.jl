@@ -71,7 +71,7 @@ for nr0_sq in nr0_sq_vals
     delta_opt = delta_vals[best_idx]
     Δτ_DMC = delta_opt^2 / (2 * 0.5)  # D = ħ²/(2m) with ħ=1, m=1
     println("\nOptimal delta = $(delta_opt)  (acceptance = $(round(acceptance_vals[best_idx]*100, digits=3))%)")
-    println("\nFor the DMC run: δ = √{DΔτ} → Δτ = δ^2/D = " * string(round(Δτ_DMC, digits=7)))
+    println("\nFor the DMC run: δ = √{DΔτ} → Δτ = δ^2/D = " * string(round(Δτ_DMC*0.1, digits=7)))
 
     # ── Plot acceptance vs delta ──────────────────────────────────────────────────
     p_sweep = plot(delta_vals, acceptance_vals;

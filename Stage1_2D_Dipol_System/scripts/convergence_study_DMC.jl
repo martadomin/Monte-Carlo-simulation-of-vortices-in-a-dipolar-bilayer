@@ -10,18 +10,22 @@ include(normpath(joinpath(@__DIR__, "..", "src", "observables.jl")))
 
 # ── Parameters ────────────────────────────────────────────────────────────────
 num_part      = 30
-num_walkers   = 200
+num_walkers   = 400
 quadratic     = true
 type_dmc      = quadratic ? "quadratic" : "linear"
 total_time    = 10.0
 equil_time    = 2.0     # fixed equilibration imaginary time
-τ_factors = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0]
+τ_factors = [1.0]  # factors to multiply Δτ_ref by
 
 # ── Load reference Δτ table ───────────────────────────────────────────────────
 ref_data     = readdlm(joinpath(@__DIR__, "..", "data", "sweep_results",
                "delta_optimal_N$(num_part)_DMC.txt"), '\t', Float64, skipstart=1)
+println(joinpath(@__DIR__, "..", "data", "sweep_results",
+               "delta_optimal_N$(num_part)_DMC.txt"))
 nr0_sq_vals  = ref_data[:, 1]
+print(nr0_sq_vals)
 Δτ_ref_vals  = ref_data[:, 4]
+print(Δτ_ref_vals)
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
 for (nr0_sq, Δτ_ref) in zip(nr0_sq_vals, Δτ_ref_vals)

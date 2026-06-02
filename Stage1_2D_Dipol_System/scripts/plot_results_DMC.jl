@@ -13,7 +13,7 @@ default(
     guidefontsize     = 10,
     tickfontsize      = 8,
     legendfontsize    = 7,
-    size              = (900, 380),
+    size              = (700, 380),
     linewidth         = 1.5,
     markersize        = 5,
     markerstrokewidth = 0.5,

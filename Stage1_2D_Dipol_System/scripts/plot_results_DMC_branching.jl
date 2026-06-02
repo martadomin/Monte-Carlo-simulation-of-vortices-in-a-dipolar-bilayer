@@ -63,30 +63,30 @@ mask(dt) = (dt .>= lo) .& (dt .<= hi)
 mlr = mask(dt_lr)
 mqr = mask(dt_qr)
 
-# # ── Helper: weighted GLM fit ──────────────────────────────────────────────────
-# function glm_fit(dt, E, err, degree)
-#     df = DataFrame(dt=dt, E=E, dt2=dt.^2, w=1.0./err.^2)
-#     if degree == 1
-#         m = lm(@formula(E ~ dt), df, wts=df.w)
-#     else
-#         m = lm(@formula(E ~ dt + dt2), df, wts=df.w)
-#     end
-#     return coef(m)[1], stderror(m)[1]   # E₀, σ_E₀
-# end
+# ── Helper: weighted GLM fit ──────────────────────────────────────────────────
+function glm_fit(dt, E, err, degree)
+    df = DataFrame(dt=dt, E=E, dt2=dt.^2, w=1.0./err.^2)
+    if degree == 1
+        m = lm(@formula(E ~ dt), df, wts=df.w)
+    else
+        m = lm(@formula(E ~ dt + dt2), df, wts=df.w)
+    end
+    return coef(m)[1], stderror(m)[1]   # E₀, σ_E₀
+end
 
 # # Fits
 # E0_l,  σ_l  = glm_fit(dt_l[ml],   E_l[ml],   err_l[ml],   1)
-# E0_lr, σ_lr = glm_fit(dt_lr[mlr], E_lr[mlr], err_lr[mlr], 1)
+E0_lr, σ_lr = glm_fit(dt_lr[mlr], E_lr[mlr], err_lr[mlr], 1)
 # E0_q,  σ_q  = glm_fit(dt_q[mq],   E_q[mq],   err_q[mq],   2)
-# E0_qr, σ_qr = glm_fit(dt_qr[mqr], E_qr[mqr], err_qr[mqr], 2)
+E0_qr, σ_qr = glm_fit(dt_qr[mqr], E_qr[mqr], err_qr[mqr], 2)
 
-# # Smooth fit curves from Polynomials.jl (for drawing only)
+# Smooth fit curves from Polynomials.jl (for drawing only)
 # fit_l_poly  = poly_fit(dt_l[ml],   E_l[ml],   1)
-# fit_lr_poly = poly_fit(dt_lr[mlr], E_lr[mlr], 1)
+fit_lr_poly = poly_fit(dt_lr[mlr], E_lr[mlr], 1)
 # fit_q_poly  = poly_fit(dt_q[mq],   E_q[mq],   2)
-# fit_qr_poly = poly_fit(dt_qr[mqr], E_qr[mqr], 2)
+fit_qr_poly = poly_fit(dt_qr[mqr], E_qr[mqr], 2)
 
-Δτ_range = range(0, hi, length=300)
+Δτ_range = range(0, minimum(dt_lr[mlr]), length=300)
 
 # # ── Subplot 1: No branching ───────────────────────────────────────────────────
 # p_nb = plot(
@@ -118,8 +118,8 @@ p_b = plot(
 
 plot!(p_b, dt_lr[mlr], E_lr[mlr]; yerror=err_lr[mlr], color=col_lin_real,  linestyle=:solid, marker=:circle,  label=L"\mathrm{Linear}")
 plot!(p_b, dt_qr[mqr], E_qr[mqr]; yerror=err_qr[mqr], color=col_quad_real, linestyle=:solid, marker=:diamond, label=L"\mathrm{Quadratic}")
-# plot!(p_b, Δτ_range, fit_lr_poly.(Δτ_range); color=col_lin_real,  alpha=0.5, linewidth=1.5, label="")
-# plot!(p_b, Δτ_range, fit_qr_poly.(Δτ_range); color=col_quad_real, alpha=0.5, linewidth=1.5, label="")
+plot!(p_b, Δτ_range, fit_lr_poly.(Δτ_range); color=col_lin_real,  alpha=0.5, linewidth=1.5, label="")
+plot!(p_b, Δτ_range, fit_qr_poly.(Δτ_range); color=col_quad_real, alpha=0.5, linewidth=1.5, label="")
 # scatter!(p_b, [0.0], [E0_lr]; color=col_lin_real,  marker=:star5, markersize=12, label="")
 # scatter!(p_b, [0.0], [E0_qr]; color=col_quad_real, marker=:star5, markersize=12, label="")
 # hline!(p_b, [E_vmc]; linestyle=:dot, linewidth=1.2, color=:black, alpha=0.7, label=L"E_\mathrm{VMC}")

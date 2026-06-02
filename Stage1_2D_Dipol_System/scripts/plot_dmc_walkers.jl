@@ -1,5 +1,32 @@
 # Plot DMC energy vs number of walkers for a given nr0sq
-using DelimitedFiles, Plots, Statistics
+using DelimitedFiles, Plots, Statistics, LaTeXStrings, PGFPlotsX
+
+ENV["PATH"] = "C:\\Users\\marta\\AppData\\Local\\Programs\\MiKTeX\\miktex\\bin\\x64;" * ENV["PATH"]
+
+pgfplotsx()
+
+default(
+    fontfamily        = "Computer Modern",
+    titlefontsize     = 11,
+    guidefontsize     = 10,
+    tickfontsize      = 8,
+    legendfontsize    = 7,
+    size              = (700, 380),
+    linewidth         = 1.5,
+    markersize        = 5,
+    markerstrokewidth = 0.5,
+    framestyle        = :box,
+    grid              = true,
+    gridalpha         = 0.25,
+    gridlinewidth     = 0.5,
+    gridstyle         = :dot,
+    left_margin       = 5Plots.mm,
+    bottom_margin     = 4Plots.mm,
+    right_margin      = 3Plots.mm,
+    top_margin        = 2Plots.mm,
+    dpi               = 600
+)
+
 
 # ----------------- User parameters -----------------
 # Edit these to match the run you want to inspect. `nr0sq_str` must match
@@ -103,9 +130,14 @@ energies = energies[order]
 errors = errors[order]
 Δτs = Δτs[order]
 
-p = plot!(1 ./walkers, energies; yerror=errors, xlabel="1 / Number of walkers",
-            ylabel="E / N", title="DMC energy vs walkers (nr0sq=$(nr0sq_str))",
-            marker=:circle, legend=false, xscale=:log10)
+p = plot!(1 ./ walkers, energies;
+    yerror  = errors,
+    xlabel  = L"1/N_{\mathrm{walkers}}",
+    ylabel  = L"E/N \cdot (nr_0^2)^{-3/2}",
+    title   = L"\mathrm{DMC\ energy\ vs\ walkers},\quad nr_0^2 = %$(nr0sq_str)",
+    marker  = :circle,
+    legend  = false,
+    xscale  = :log10)
 
 # Annotate Δτ used (if consistent across files, display it)
 unique_Δτ = unique(Δτs)
