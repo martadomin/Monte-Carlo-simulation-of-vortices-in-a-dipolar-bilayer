@@ -61,12 +61,17 @@ p2 = plot(nr0_range, E_paper_normalized,
           xticks=(xticks_vals, xticks_labels),
           yticks=(yticks_vals, yticks_labels))
 
-scatter!(nr0_sq_vals, E_vmc .+ E_tail,
-         yerror=error_E_vmc,
-         label=L"\mathrm{VMC,\ }N = %$(num_part)",
-         marker=:circle,
-         markersize=6,
-         color=:red)
+# scatter!(nr0_sq_vals, E_vmc .+ E_tail,
+#          yerror=error_E_vmc,
+#          label=L"\mathrm{VMC,\ }N = %$(num_part)",
+#          marker=:circle,
+#          markersize=6,
+#          color=:red)
+println(E_dmc .+ E_tail)
+println(E_vmc .+ E_tail)
+
+nr0 = 16.0
+println((a1*nr0^(3/2) + a2*nr0^(5/4) + a3*nr0^(1/2)) / nr0^(3/2))
 
 scatter!(nr0_sq_vals, E_dmc .+ E_tail,
          yerror=error_E_dmc,

@@ -11,7 +11,7 @@ default(
     guidefontsize     = 10,
     tickfontsize      = 8,
     legendfontsize    = 7,
-    size              = (700, 380),
+    size              = (700, 480),
     linewidth         = 1.5,
     markersize        = 5,
     markerstrokewidth = 0.5,
@@ -129,6 +129,11 @@ walkers = walkers[order]
 energies = energies[order]
 errors = errors[order]
 Δτs = Δτs[order]
+
+for i in 1:length(walkers)
+    println("$(walkers[i]) & $(round(energies[i], digits=6)) & $(round(errors[i], digits=6)) \\\\ \n \\hline")
+
+end
 
 p = plot!(1 ./ walkers, energies;
     yerror  = errors,

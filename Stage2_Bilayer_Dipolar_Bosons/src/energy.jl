@@ -21,6 +21,7 @@ The interaction is given by `|r_i - r_j|^(-3)` for each pair `(i < j)`.
 function local_interaction_energy(x_A::Vector{Float64}, y_A::Vector{Float64}, x_B::Vector{Float64}, y_B::Vector{Float64}, L::Float64, h::Float64)::Float64
     E_int = 0.0
     N_half = length(x_A)
+    h_sq = h^2
 
     @assert length(y_A) == N_half && length(x_B) == N_half && length(y_B) == N_half "Input coordinate vectors must have the same length"
 
@@ -30,7 +31,7 @@ function local_interaction_energy(x_A::Vector{Float64}, y_A::Vector{Float64}, x_
              dx = get_periodic_difference(x_A[i], x_A[j], L)
              dy = get_periodic_difference(y_A[i], y_A[j], L)
              r_ij = dx^2 + dy^2
-             if r_ij <= L/2
+             if r_ij <= (L/2)^2
                  E_int += (r_ij)^(-3/2)
              end
          end
@@ -42,7 +43,7 @@ function local_interaction_energy(x_A::Vector{Float64}, y_A::Vector{Float64}, x_
              dx = get_periodic_difference(x_B[α], x_B[β], L)
              dy = get_periodic_difference(y_B[α], y_B[β], L)
              r_αβ = dx^2 + dy^2
-             if r_αβ <= L/2
+             if r_αβ <= (L/2)^2
                  E_int += (r_αβ)^(-3/2)
              end
          end
@@ -53,9 +54,8 @@ function local_interaction_energy(x_A::Vector{Float64}, y_A::Vector{Float64}, x_
         @inbounds for α in 1:N_half
             dx = get_periodic_difference(x_A[i], x_B[α], L)
             dy = get_periodic_difference(y_A[i], y_B[α], L)
-            h_sq = h^2
             r_iα = dx^2 + dy^2
-            if r_iα <= L/2
+            if r_iα <= (L/2)^2
                 E_int += (r_iα - 2*h_sq) / (r_iα + h_sq)^(5/2)
              end
         end
@@ -65,42 +65,59 @@ function local_interaction_energy(x_A::Vector{Float64}, y_A::Vector{Float64}, x_
 end
 
 
-function energy_estimators(xcoord::Vector{Float64}, ycoord::Vector{Float64},
-                            L::Float64, R_match::Float64,
-                            Constants::Tuple{Float64, Float64, Float64})::Tuple{Vector{Float64}, Vector{Float64}, Float64, Float64, Float64, Float64, Float64}
+function energy_estimators(x_A::Vector{Float64}, y_A::Vector{Float64},
+                            x_B::Vector{Float64}, y_B::Vector{Float64},
+                            L::Float64, h::Float64,
+                            R_match::Float64,
+                            Constants::Tuple{Float64, Float64, Float64},
+                            R0::Float64,
+                            r_grid::Vector{Float64},
+                            u_prime_grid::Vector{Float64},
+                            u_doubleprime_grid::Vector{Float64})::Tuple{Vector{Float64}, Vector{Float64}, Float64, Float64, Float64, Float64, Float64}
 
-    num_part        = length(xcoord)
-    drift_x         = zeros(Float64, num_part)
-    drift_y         = zeros(Float64, num_part)
+    N_half        = length(x_A)
+    drift_x         = zeros(Float64, 2*N_half)
+    drift_y         = zeros(Float64, 2*N_half)
     E_kin           = 0.0
     F_drift_sq      = 0.0
     Scalar_term_sum = 0.0
     E_int           = 0.0
 
-    @inbounds for k in 1:num_part
+    # ── Layer A particles ─────────────────────────────────────────
+    @inbounds for k in 1:N_half
         F_x         = 0.0
         F_y         = 0.0
         scalar_term = 0.0
 
-        for i in 1:num_part
-            if i != k
-                dx = get_periodic_difference(xcoord[k], xcoord[i], L)
-                dy = get_periodic_difference(ycoord[k], ycoord[i], L)
+        @inbounds for j in 1:N_half
+
+            # AA pairs
+            if j != k
+                dx = get_periodic_difference(x_A[k], x_A[j], L)
+                dy = get_periodic_difference(y_A[k], y_A[j], L)
                 r  = sqrt(dx^2 + dy^2)
-
                 if r > 1e-10
-                    # Compute ONCE per pair
-                    du_dr   = u2_first_derivative(r, R_match, L, Constants)
-                    d2u_dr2 = u2_second_derivative(r, R_match, L, Constants)
-
+                    du_dr   = u_AA_prime(r, R_match, L, Constants)
+                    d2u_dr2 = u_AA_second(r, R_match, L, Constants)
                     F_x         += du_dr * (dx / r)
                     F_y         += du_dr * (dy / r)
-                    scalar_term += d2u_dr2 + (du_dr / r)
-
+                    scalar_term += d2u_dr2 + du_dr / r
                 end
             end
-        end
 
+            # AB pairs — same loop index j used as α
+            dx = get_periodic_difference(x_A[k], x_B[j], L)
+            dy = get_periodic_difference(y_A[k], y_B[j], L)
+            r  = sqrt(dx^2 + dy^2)
+            if r > 1e-10
+                du_dr   = u_AB_prime(r, R0, r_grid, u_prime_grid)
+                d2u_dr2 = u_AB_second(r, R0, r_grid, u_doubleprime_grid)
+                F_x         += du_dr * (dx / r)
+                F_y         += du_dr * (dy / r)
+                scalar_term += d2u_dr2 + du_dr / r
+            end
+
+        end  # end j loop
 
         drift_x[k]      = F_x
         drift_y[k]      = F_y
@@ -109,11 +126,58 @@ function energy_estimators(xcoord::Vector{Float64}, ycoord::Vector{Float64},
         E_kin           += F_x^2 + F_y^2 + scalar_term
     end
 
+    # ── Layer B particles ─────────────────────────────────────────
+    @inbounds for γ in 1:N_half
+        F_x         = 0.0
+        F_y         = 0.0
+        scalar_term = 0.0
+
+        @inbounds for β in 1:N_half
+
+            # BB pairs
+            if β != γ
+                dx = get_periodic_difference(x_B[γ], x_B[β], L)
+                dy = get_periodic_difference(y_B[γ], y_B[β], L)
+                r  = sqrt(dx^2 + dy^2)
+                if r > 1e-10
+                    du_dr   = u_AA_prime(r, R_match, L, Constants)
+                    d2u_dr2 = u_AA_second(r, R_match, L, Constants)
+                    F_x         += du_dr * (dx / r)
+                    F_y         += du_dr * (dy / r)
+                    scalar_term += d2u_dr2 + du_dr / r
+                end
+            end
+
+            # AB pairs — same loop index β used as i
+            dx = get_periodic_difference(x_B[γ], x_A[β], L)
+            dy = get_periodic_difference(y_B[γ], y_A[β], L)
+            r  = sqrt(dx^2 + dy^2)
+            if r > 1e-10
+                du_dr   = u_AB_prime(r, R0, r_grid, u_prime_grid)
+                d2u_dr2 = u_AB_second(r, R0, r_grid, u_doubleprime_grid)
+                F_x         += du_dr * (dx / r)
+                F_y         += du_dr * (dy / r)
+                scalar_term += d2u_dr2 + du_dr / r
+            end
+
+        end  # end β loop
+
+        drift_x[N_half + γ] = F_x
+        drift_y[N_half + γ] = F_y
+        F_drift_sq          += F_x^2 + F_y^2
+        Scalar_term_sum     += scalar_term
+        E_kin               += F_x^2 + F_y^2 + scalar_term
+    end
+
+    # Interaction energy
+    E_int = local_interaction_energy(x_A, y_A, x_B, y_B, L, h)
+
+    # Three kinetic estimators
     E_kin_std       = -0.5  * E_kin
     E_kin_drift     =  0.5  * F_drift_sq
     E_kin_laplacian = -0.25 * Scalar_term_sum
     E_total         = E_kin_std + E_int
-
+    
     return drift_x, drift_y,
            E_total,
            E_kin_drift + E_int,
