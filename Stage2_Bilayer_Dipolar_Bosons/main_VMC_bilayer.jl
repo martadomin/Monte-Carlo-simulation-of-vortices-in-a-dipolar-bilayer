@@ -58,9 +58,6 @@ rmatch_path = joinpath(@__DIR__, "..", "Stage1_2D_Dipol_System", "data", "sweep_
 global R_match, E_opt_single_layer_total = read_optimal_stage1(rmatch_path)
 println("✓ R_match = $R_match r₀  (loaded from $(basename(rmatch_path)))")
 
-# Interlayer separations to sweep
-global h_vals = range(0.3, 1.5, length=21)  # add h values here as the sweeps finish
-
 # ──────────────────────────────────────────────────────────────────
 # SHOOTING METHOD PARAMETERS (fixed)
 # ──────────────────────────────────────────────────────────────────
@@ -73,12 +70,14 @@ global tol_shoot = 1e-10
 # VMC PARAMETERS
 # ──────────────────────────────────────────────────────────────────
 
-global num_steps_coarse    = 10^5    # MC steps per R0 — coarse sweep
-global num_steps_fine      = 10^6  # MC steps per R0 — fine sweep
-global num_steps_production = 10^6   # MC steps — production run
-global num_tune_steps      = 5000    # Steps for delta tuning
+global num_steps_coarse    = 10^6  # MC steps per R0 — coarse sweep
+global num_steps_fine      = 10^7 # MC steps per R0 — fine sweep
+global num_steps_production = 10^7  # MC steps — production run
+global num_tune_steps      = 10000  # Steps for delta tuning
 global n_points_sweep      = 12      # Points per sweep stage
 
+# Interlayer separations to sweep
+global h_vals = range(0.7, 1.5, length=n_points_sweep)  # add h values here as the sweeps finish
 # ──────────────────────────────────────────────────────────────────
 # EXACT DIMER BINDING ENERGIES
 # ──────────────────────────────────────────────────────────────────
