@@ -59,7 +59,7 @@ function read_optimal(path::String)
         k == "err_opt"  && (err_opt = parse(Float64, v))
         k == "energy_b" && (eps_b   = parse(Float64, v))
     end
-    isnan(L) && (L = sqrt(num_part / nr0_sq))   # fallback
+    isnan(L) && (L = sqrt(N / nr0_sq))   # fallback
     return R0_opt, E_opt, err_opt, eps_b, L
 end
 

@@ -14,13 +14,11 @@ function move_one_part(x_A::Vector{Float64}, y_A::Vector{Float64},
     y_B_new = copy(y_B)
 
     if rand() < 0.5
-        # Move a particle in layer A
         moved_id          = rand(1:length(x_A))
         x_A_new[moved_id] = wrap_position(x_A[moved_id] + rand() * 2 * delta - delta, L)
         y_A_new[moved_id] = wrap_position(y_A[moved_id] + rand() * 2 * delta - delta, L)
         return moved_id, :A, x_A_new, y_A_new, x_B_new, y_B_new
     else
-        # Move a particle in layer B
         moved_id          = rand(1:length(x_B))
         x_B_new[moved_id] = wrap_position(x_B[moved_id] + rand() * 2 * delta - delta, L)
         y_B_new[moved_id] = wrap_position(y_B[moved_id] + rand() * 2 * delta - delta, L)
@@ -36,17 +34,23 @@ function move_all_part(x_A, y_A, x_B, y_B, delta, L)
     return x_A_new, y_A_new, x_B_new, y_B_new
 end
 
+"""
+    compute_logΨ(x_A, y_A, x_B, y_B, R_match, R0, itp_u, L, Constants) -> Float64
+
+Computes log|Ψ_T| for the bilayer trial wavefunction:
+    log Ψ = Σ_{i<j} u_AA(r_ij) + Σ_{α<β} u_AA(r_αβ) + Σ_{i,α} u_AB(r_iα)
+Used in the move_all Metropolis acceptance ratio.
+"""
 function compute_logΨ(x_A::Vector{Float64},
                       y_A::Vector{Float64},
                       x_B::Vector{Float64},
                       y_B::Vector{Float64},
                       R_match::Float64,
                       R0::Float64,
-                      r_grid::Vector{Float64},
-                      psi::Vector{Float64},
+                      itp_u,
                       L::Float64,
                       Constants::Tuple{Float64, Float64, Float64})::Float64
-    logΨ = 0.0
+    logΨ   = 0.0
     N_half = length(x_A)
 
     # AA pairs
@@ -54,7 +58,7 @@ function compute_logΨ(x_A::Vector{Float64},
         @inbounds for j in (i + 1):N_half
             dx = get_periodic_difference(x_A[i], x_A[j], L)
             dy = get_periodic_difference(y_A[i], y_A[j], L)
-            r = sqrt(dx^2 + dy^2)
+            r  = sqrt(dx^2 + dy^2)
             logΨ += u_AA(r, R_match, L, Constants)
         end
     end
@@ -64,7 +68,7 @@ function compute_logΨ(x_A::Vector{Float64},
         @inbounds for β in (α + 1):N_half
             dx = get_periodic_difference(x_B[α], x_B[β], L)
             dy = get_periodic_difference(y_B[α], y_B[β], L)
-            r = sqrt(dx^2 + dy^2)
+            r  = sqrt(dx^2 + dy^2)
             logΨ += u_AA(r, R_match, L, Constants)
         end
     end
@@ -74,15 +78,20 @@ function compute_logΨ(x_A::Vector{Float64},
         @inbounds for α in 1:N_half
             dx = get_periodic_difference(x_A[i], x_B[α], L)
             dy = get_periodic_difference(y_A[i], y_B[α], L)
-            r = sqrt(dx^2 + dy^2)
-            logΨ += u_AB(r, R0, r_grid, psi)
+            r  = sqrt(dx^2 + dy^2)
+            logΨ += u_AB(r, R0, itp_u)
         end
     end
-    
+
     return logΨ
 end
 
-#Only valid when moving one particle for each step:
+"""
+    compute_ΔlogΨ(...) -> Float64
+
+Computes the change in log|Ψ_T| when one particle is moved.
+Only valid for single-particle moves (move_one_part).
+"""
 function compute_ΔlogΨ(x_A_old::Vector{Float64}, y_A_old::Vector{Float64},
                         x_B_old::Vector{Float64}, y_B_old::Vector{Float64},
                         x_A_new::Vector{Float64}, y_A_new::Vector{Float64},
@@ -91,8 +100,7 @@ function compute_ΔlogΨ(x_A_old::Vector{Float64}, y_A_old::Vector{Float64},
                         R_match::Float64, L::Float64,
                         Constants::Tuple{Float64, Float64, Float64},
                         R0::Float64,
-                        r_grid::Vector{Float64},
-                        psi::Vector{Float64})::Float64
+                        itp_u)::Float64
 
     ΔlogΨ  = 0.0
     N_half = length(x_A_old)
@@ -100,7 +108,7 @@ function compute_ΔlogΨ(x_A_old::Vector{Float64}, y_A_old::Vector{Float64},
     if layer == :A
         @inbounds for j in 1:N_half
 
-            # AA pairs: id vs other A particles
+            # AA pairs: moved particle (id) vs all other A particles
             if j != id
                 r_old = sqrt(get_periodic_difference(x_A_old[id], x_A_old[j], L)^2 +
                              get_periodic_difference(y_A_old[id], y_A_old[j], L)^2)
@@ -110,19 +118,18 @@ function compute_ΔlogΨ(x_A_old::Vector{Float64}, y_A_old::Vector{Float64},
                          u_AA(r_old, R_match, L, Constants)
             end
 
-            # AB pairs: id (layer A) vs all B particles
+            # AB pairs: moved A particle (id) vs all B particles
             r_old = sqrt(get_periodic_difference(x_A_old[id], x_B_old[j], L)^2 +
                          get_periodic_difference(y_A_old[id], y_B_old[j], L)^2)
             r_new = sqrt(get_periodic_difference(x_A_new[id], x_B_old[j], L)^2 +
                          get_periodic_difference(y_A_new[id], y_B_old[j], L)^2)
-            ΔlogΨ += u_AB(r_new, R0, r_grid, psi) -
-                     u_AB(r_old, R0, r_grid, psi)
+            ΔlogΨ += u_AB(r_new, R0, itp_u) - u_AB(r_old, R0, itp_u)
         end
 
     else  # layer == :B
         @inbounds for j in 1:N_half
 
-            # BB pairs: id vs other B particles
+            # BB pairs: moved particle (id) vs all other B particles
             if j != id
                 r_old = sqrt(get_periodic_difference(x_B_old[id], x_B_old[j], L)^2 +
                              get_periodic_difference(y_B_old[id], y_B_old[j], L)^2)
@@ -132,19 +139,24 @@ function compute_ΔlogΨ(x_A_old::Vector{Float64}, y_A_old::Vector{Float64},
                          u_AA(r_old, R_match, L, Constants)
             end
 
-            # AB pairs: id (layer B) vs all A particles
+            # AB pairs: moved B particle (id) vs all A particles
             r_old = sqrt(get_periodic_difference(x_B_old[id], x_A_old[j], L)^2 +
                          get_periodic_difference(y_B_old[id], y_A_old[j], L)^2)
             r_new = sqrt(get_periodic_difference(x_B_new[id], x_A_old[j], L)^2 +
                          get_periodic_difference(y_B_new[id], y_A_old[j], L)^2)
-            ΔlogΨ += u_AB(r_new, R0, r_grid, psi) -
-                     u_AB(r_old, R0, r_grid, psi)
+            ΔlogΨ += u_AB(r_new, R0, itp_u) - u_AB(r_old, R0, itp_u)
         end
     end
 
     return ΔlogΨ
 end
 
+"""
+    tune_delta(...) -> (delta, x_A, y_A, x_B, y_B)
+
+Tunes the Metropolis step size to achieve target acceptance ratio (~50%).
+Uses single-particle moves only.
+"""
 function tune_delta(
     x_A::Vector{Float64},
     y_A::Vector{Float64},
@@ -154,20 +166,22 @@ function tune_delta(
     R_match::Float64,
     Constants::Tuple{Float64, Float64, Float64},
     R0::Float64,
-    r_grid::Vector{Float64},
-    psi::Vector{Float64};
+    itp_u;
     target_ratio::Float64 = 0.5,
-    num_tune_steps::Int = 10^4,
-    block_size::Int = 100
+    num_tune_steps::Int   = 10^4,
+    block_size::Int       = 100
 )::Tuple{Float64, Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}}
 
-    delta = 0.1 * L 
+    delta = 0.1 * L
 
     for _ in 1:num_tune_steps÷block_size
         accepted = 0
         for _ in 1:block_size
-            moved_id, layer, x_A_new, y_A_new, x_B_new, y_B_new = move_one_part(x_A, y_A, x_B, y_B, delta, L)
-            ΔlogΨ = compute_ΔlogΨ(x_A, y_A, x_B, y_B,x_A_new, y_A_new, x_B_new, y_B_new,moved_id, layer, R_match, L, Constants, R0, r_grid, psi)
+            moved_id, layer, x_A_new, y_A_new, x_B_new, y_B_new =
+                move_one_part(x_A, y_A, x_B, y_B, delta, L)
+            ΔlogΨ = compute_ΔlogΨ(x_A, y_A, x_B, y_B,
+                                   x_A_new, y_A_new, x_B_new, y_B_new,
+                                   moved_id, layer, R_match, L, Constants, R0, itp_u)
             if log(rand()) < 2 * ΔlogΨ
                 x_A = x_A_new
                 y_A = y_A_new
@@ -176,47 +190,41 @@ function tune_delta(
                 accepted += 1
             end
         end
-        # adjust delta to push acceptance ratio towards target
         ratio = accepted / block_size
         delta *= (ratio + 1e-2) / target_ratio
-        delta = min(delta, L/2)  
-        delta = max(delta, 1e-6) 
+        delta  = min(delta, L/2)
+        delta  = max(delta, 1e-6)
     end
 
     return delta, x_A, y_A, x_B, y_B
 end
 
-
 """
-    metropolis(num_part, num_steps, delta, L, R_match, Constants, final_energy_plot, plot_every)
+    metropolis(num_part, num_steps, delta, L, h, R_match, R0, itp_u, itp_up, itp_upp,
+               Constants; kwargs...) -> (energies, ..., x_coord, y_coord)
 
-Runs a full Metropolis Monte Carlo simulation for the 2D dipolar system.
+Runs the Metropolis VMC loop for the bilayer dipolar system.
 
 # Input:
-- `num_part::Int`: Number of particles.
-- `num_steps::Int`: Number of Metropolis steps.
-- `delta::Float64`: Maximum displacement for particle moves.
-- `L::Float64`: Length of the periodic simulation box.
-- `R_match::Float64`: Matching radius used in the two-body Jastrow factor.
-- `Constants::Tuple{Float64, Float64, Float64}`: Parameters used by the two-body correlation function.
-- `final_energy_plot`: Controls whether the final energy plot is produced.
-- `plot_every`: Interval used for plotting during the simulation.
+- `num_part`   : Total number of particles (N = N_A + N_B, must be even).
+- `num_steps`  : Number of MC steps.
+- `delta`      : Step size (tuned externally via tune_delta).
+- `L`          : Box length.
+- `h`          : Interlayer separation.
+- `R_match`    : Matching radius for the intra-layer Jastrow factor.
+- `R0`         : Cutoff radius for the inter-layer Jastrow factor (variational parameter).
+- `itp_u`      : Cubic spline interpolant of log(f_AB), from build_fAB.
+- `itp_up`     : Cubic spline interpolant of u'_AB, from build_fAB.
+- `itp_upp`    : Interpolant of u''_AB, from build_fAB.
+- `Constants`  : (C1, C2, C3) for the intra-layer Jastrow factor.
 
-
-# Notes
-- Uses block averaging (`step_block`) for energy and structure factor sampling to reduce autocorrelation.
-- Particle positions are stored and binned in [-L/2, L/2].
-- Output: density and pair correlation histograms normalized as probability densities.
-- The function displays a plot of the energy evolution over Monte Carlo steps.
-
-# Usage
-Call this function to simulate the equilibrium properties of the system, and to extract observables such as energy, density profiles, g2, and structure factor.
-
-# Example
-```julia
-E_tot, E_sq, acceptance_ratio, E_kin, E_int, E_tot_drift = metropolis(30, 10^6, 0.1, sqrt(30), 0.5, (1.0, 1.0, 1.0); final_energy_plot=false, plot_every=100)
+# Keyword arguments:
+- `x_A_init, y_A_init, x_B_init, y_B_init` : Initial positions (optional).
+- `final_energy_plot` : Show energy trace plot at the end.
+- `plot_every`        : Stride for energy trace accumulation.
+- `progress`          : Show progress bar.
+- `move_all`          : Use move_all_part instead of move_one_part.
 """
-
 function metropolis(
     num_part::Int,
     num_steps::Int,
@@ -225,74 +233,89 @@ function metropolis(
     h::Float64,
     R_match::Float64,
     R0::Float64,
-    r_grid::Vector{Float64},
-    psi::Vector{Float64},
-    u_prime_grid::Vector{Float64},
-    u_doubleprime_grid::Vector{Float64},
+    itp_u,
+    itp_up,
+    itp_upp,
     Constants::Tuple{Float64, Float64, Float64};
-    x_init::Union{Vector{Float64}, Nothing} = nothing,
-    y_init::Union{Vector{Float64}, Nothing} = nothing,
+    x_A_init::Union{Vector{Float64}, Nothing} = nothing,
+    y_A_init::Union{Vector{Float64}, Nothing} = nothing,
+    x_B_init::Union{Vector{Float64}, Nothing} = nothing,
+    y_B_init::Union{Vector{Float64}, Nothing} = nothing,
     final_energy_plot::Bool = false,
-    plot_every::Int = 100,
-    progress::Bool = true,
-    num_bins::Int = 100,
-    move_all::Bool = false
-    )::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Vector{Float64}, Vector{Float64}}
+    plot_every::Int         = 100,
+    progress::Bool          = true,
+    num_bins::Int           = 100,
+    move_all::Bool          = false
+)::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64},
+         Float64, Float64, Float64, Float64, Float64, Float64, Float64,
+         Vector{Float64}, Vector{Float64}}
 
-    acceptance_ratio = 0.0
-    n_uncorr = 0
-    step_block = 1
-    E_tot = 0.0
-    E_sq = 0.0
-    E_kin = 0.0
-    E_int = 0.0
-    E_tot_drift = 0.0
-    E_tot_laplacian = 0.0
-    energies = Float64[]
-    energies_drift = Float64[]
-    energies_laplacian = Float64[]
-    energy_plot = Float64[]
-    step_plot = Int[]
-    gr = zeros(Float64, num_bins)
-    n_gr_samples = 0 
-    E_local = NaN
-    E_local_drift = NaN
+    N_half = num_part ÷ 2
+
+    acceptance_ratio  = 0.0
+    n_uncorr          = 0
+    step_block        = 1
+    E_tot             = 0.0
+    E_sq              = 0.0
+    E_kin             = 0.0
+    E_int             = 0.0
+    E_tot_drift       = 0.0
+    E_tot_laplacian   = 0.0
+    energies          = Float64[]
+    energies_drift    = Float64[]
+    energies_laplacian= Float64[]
+    energy_plot       = Float64[]
+    step_plot         = Int[]
+    g_r               = zeros(Float64, num_bins)
+    n_gr_samples      = 0
+    E_local           = NaN
+    E_local_drift     = NaN
     E_local_laplacian = NaN
-    E_kinetic = NaN
-    F_drift = NaN
-    E_potential = NaN
-    
-    if x_init === nothing || y_init === nothing
+    E_kinetic         = NaN
+    E_potential       = NaN
+
+    # ── Initial configuration ────────────────────────────────────────
+    if any(isnothing, (x_A_init, y_A_init, x_B_init, y_B_init))
         x_coord, y_coord = random_initial_config(num_part, L, "Uniform")
+        x_A = x_coord[1:N_half]
+        y_A = y_coord[1:N_half]
+        x_B = x_coord[N_half+1:end]
+        y_B = y_coord[N_half+1:end]
     else
-        x_coord = copy(x_init)
-        y_coord = copy(y_init)
+        x_A = copy(x_A_init)
+        y_A = copy(y_A_init)
+        x_B = copy(x_B_init)
+        y_B = copy(y_B_init)
     end
 
-    x_A, y_A = x_coord[1:num_part÷2], y_coord[1:num_part÷2]
-    x_B, y_B = x_coord[(num_part÷2 + 1):end], y_coord[(num_part÷2 + 1):end]
-
-    _, _, E_local, E_local_drift, E_local_laplacian, E_kinetic, E_potential = energy_estimators(x_A, y_A, x_B, y_B, L, h, R_match, Constants, R0, r_grid, u_prime_grid, u_doubleprime_grid)
+    # ── Initial energy ───────────────────────────────────────────────
+    _, _, E_local, E_local_drift, E_local_laplacian, E_kinetic, E_potential =
+        energy_estimators(x_A, y_A, x_B, y_B, L, h, R_match, Constants, R0, itp_up, itp_upp)
     @assert !isnan(E_local) "Initial configuration produced NaN energy. Re-initialize."
-    
-    if progress == true
-        progress_bar = Progress(num_steps; desc="Running Metropolis $num_part...", showspeed=true)
+
+    if progress
+        progress_bar = Progress(num_steps; desc="Running Metropolis N=$num_part...", showspeed=true)
     end
 
-    logΨ_current = move_all ? compute_logΨ(x_A, y_A, x_B, y_B, R_match, R0, r_grid, psi, L, Constants) : 0.0
+    logΨ_current = move_all ?
+        compute_logΨ(x_A, y_A, x_B, y_B, R_match, R0, itp_u, L, Constants) : 0.0
 
+    # ── Main MC loop ─────────────────────────────────────────────────
     for i in 1:num_steps
-        if progress == true
-            next!(progress_bar)
-        end
+        progress && next!(progress_bar)
 
-        if move_all == true
-            x_A_new, y_A_new, x_B_new, y_B_new = move_all_part(x_A, y_A, x_B, y_B, delta, L)
-            logΨ_new = compute_logΨ(x_A_new, y_A_new, x_B_new, y_B_new, R_match, R0, r_grid, psi, L, Constants)
+        if move_all
+            x_A_new, y_A_new, x_B_new, y_B_new =
+                move_all_part(x_A, y_A, x_B, y_B, delta, L)
+            logΨ_new = compute_logΨ(x_A_new, y_A_new, x_B_new, y_B_new,
+                                    R_match, R0, itp_u, L, Constants)
             ΔlogΨ = 2 * (logΨ_new - logΨ_current)
         else
-            moved_id, layer, x_A_new, y_A_new, x_B_new, y_B_new = move_one_part(x_A, y_A, x_B, y_B, delta, L)
-            ΔlogΨ = 2 * compute_ΔlogΨ(x_A, y_A, x_B, y_B, x_A_new, y_A_new, x_B_new, y_B_new, moved_id, layer, R_match, L, Constants, R0, r_grid, psi)
+            moved_id, layer, x_A_new, y_A_new, x_B_new, y_B_new =
+                move_one_part(x_A, y_A, x_B, y_B, delta, L)
+            ΔlogΨ = 2 * compute_ΔlogΨ(x_A, y_A, x_B, y_B,
+                                       x_A_new, y_A_new, x_B_new, y_B_new,
+                                       moved_id, layer, R_match, L, Constants, R0, itp_u)
         end
 
         if log(rand()) < ΔlogΨ
@@ -301,75 +324,65 @@ function metropolis(
             x_B = x_B_new
             y_B = y_B_new
             acceptance_ratio += 1
+            move_all && (logΨ_current = logΨ_new)
 
-            if move_all
-                logΨ_current = logΨ_new
-            end
-
-            _, _, E_local, E_local_drift, E_local_laplacian, E_kinetic, E_potential = energy_estimators(x_A, y_A, x_B, y_B, L, h, R_match, Constants, R0, r_grid, u_prime_grid, u_doubleprime_grid)
+            _, _, E_local, E_local_drift, E_local_laplacian, E_kinetic, E_potential =
+                energy_estimators(x_A, y_A, x_B, y_B, L, h, R_match, Constants, R0, itp_up, itp_upp)
         end
 
         if i % step_block == 0
-
             if isnan(E_local)
-                @warn "NaN detected at step $i: E_local = $E_local"
+                @warn "NaN detected at step $i"
                 continue
             end
 
-            push!(energies, E_local)
-            push!(energies_drift, E_local_drift)
+            push!(energies,           E_local)
+            push!(energies_drift,     E_local_drift)
             push!(energies_laplacian, E_local_laplacian)
 
-            E_tot += E_local
-            E_sq += E_local^2
-            E_kin += E_kinetic
-            E_int += E_potential
-            E_tot_drift += E_local_drift
+            E_tot           += E_local
+            E_sq            += E_local^2
+            E_kin           += E_kinetic
+            E_int           += E_potential
+            E_tot_drift     += E_local_drift
             E_tot_laplacian += E_local_laplacian
+            n_uncorr        += 1
 
-            n_uncorr += 1
             if i % plot_every == 0
-                push!(step_plot, i)
+                push!(step_plot,   i)
                 push!(energy_plot, E_local_drift / num_part)
             end
-            x_coord = vcat(x_A, x_B)
-            y_coord = vcat(y_A, y_B)
             n_gr_samples += 1
         end
+    end
+
+    println("Acceptance ratio: ", acceptance_ratio / num_steps)
+
+    if final_energy_plot
+        p1 = plot(step_plot, energy_plot;
+                  xlabel  = "Step",
+                  ylabel  = "E/N (drift estimator)",
+                  title   = "Energy evolution",
+                  legend  = false,
+                  lw      = 2)
+        display(p1)
+        println("\n>>> Press ENTER to continue...")
+        readline()
     end
 
     x_coord = vcat(x_A, x_B)
     y_coord = vcat(y_A, y_B)
 
-    if final_energy_plot
-        p1 = plot(
-        step_plot,
-        energy_plot,
-        xlabel="Step",
-        ylabel="Local energy per particle",
-        title="Energy evolution",
-        legend=false,
-        lw=2,
-        )
-        display(p1)
-        println("\n>>> Energy Graph created. Press ENTER to continue...")
-        readline()
-    end
-
-    println("Acceptance ratio: ", acceptance_ratio / num_steps)
-
-    # r_vals, gr_normalized = normalize_gr(gr, num_part, L, n_gr_samples)
-
     return energies,
-            energies_drift,
-            energies_laplacian,
-            E_tot / n_uncorr,
-            E_sq / n_uncorr,
-            E_tot_drift / n_uncorr,
-            E_tot_laplacian / n_uncorr,
-            E_kin / n_uncorr,
-            E_int / n_uncorr,
-            acceptance_ratio / num_steps,
-            x_coord,
-            y_coord
+           energies_drift,
+           energies_laplacian,
+           E_tot           / n_uncorr,
+           E_sq            / n_uncorr,
+           E_tot_drift     / n_uncorr,
+           E_tot_laplacian / n_uncorr,
+           E_kin           / n_uncorr,
+           E_int           / n_uncorr,
+           acceptance_ratio / num_steps,
+           x_coord,
+           y_coord
 end

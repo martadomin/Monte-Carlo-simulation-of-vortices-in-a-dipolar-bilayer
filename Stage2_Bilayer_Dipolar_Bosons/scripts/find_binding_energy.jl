@@ -1,4 +1,4 @@
-include(normpath(joinpath(@__DIR__, "..", "src", "shooting_method.jl")))
+# include(normpath(joinpath(@__DIR__, "..", "src", "shooting_method.jl")))
 using Plots, LaTeXStrings, Base.Threads
 
 # ================================================================
@@ -20,6 +20,7 @@ open(normpath(joinpath(@__DIR__, "..", "data", "binding_energy_dimer",
     end
 end
 
+exact_eps_b = Dict(h => eb for (h, eb) in zip(h_vals, energy_b_vals))
 # # Plot ε_b(h)
 # pgfplotsx()
 

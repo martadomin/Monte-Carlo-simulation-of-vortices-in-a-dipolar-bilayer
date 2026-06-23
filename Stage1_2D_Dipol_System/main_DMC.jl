@@ -11,7 +11,7 @@ include(normpath(joinpath(@__DIR__, "src", "dmc.jl")))
 
 # ── Parameters ────────────────────────────────────────────────────────────────
 num_part      = 30
-num_walkers   = 400
+num_walkers   = 500
 quadratic     = true
 type_dmc      = quadratic ? "quadratic" : "linear"
 total_time    = 10.0
@@ -19,13 +19,16 @@ equil_time    = 2.0     # fixed equilibration imaginary time
 τ_factors = [1.0]  # factors to multiply Δτ_ref by
 
 # ── Load reference Δτ table ───────────────────────────────────────────────────
-ref_data     = readdlm(joinpath(@__DIR__, "data", "sweep_results",
-               "delta_optimal_N$(num_part)_DMC.txt"), '\t', Float64, skipstart=1)
-println(joinpath(@__DIR__, "data", "sweep_results",
-               "delta_optimal_N$(num_part)_DMC.txt"))
-nr0_sq_vals  = ref_data[:, 1]
-print(nr0_sq_vals)
-Δτ_ref_vals  = ref_data[:, 4]
+file_path = joinpath(@__DIR__, "data", "sweep_results", "delta_optimal_N$(num_part)_DMC.txt")
+if isfile(file_path)
+    ref_data     = readdlm(file_path, '\t', Float64, skipstart=1)
+    println(file_path)
+    nr0_sq_vals  = ref_data[:, 1]
+    print(nr0_sq_vals)
+    Δτ_ref_vals  = ref_data[:, 4]
+else
+    Δτ = 10^-4
+end
 
 println("Starting DMC simulations...")
 
@@ -43,5 +46,5 @@ for nr0_sq_val in nr0_sq_vals
     include(normpath(joinpath(@__DIR__, "scripts", "run_dmc.jl")))
 end
 
-include(normpath(joinpath(@__DIR__, "scripts", "plot_results_DMC.jl")))
+# include(normpath(joinpath(@__DIR__, "scripts", "plot_results_DMC.jl")))
 

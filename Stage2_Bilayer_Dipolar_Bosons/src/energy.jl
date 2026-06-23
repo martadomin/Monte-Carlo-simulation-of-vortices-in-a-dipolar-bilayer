@@ -54,9 +54,9 @@ function local_interaction_energy(x_A::Vector{Float64}, y_A::Vector{Float64}, x_
         @inbounds for α in 1:N_half
             dx = get_periodic_difference(x_A[i], x_B[α], L)
             dy = get_periodic_difference(y_A[i], y_B[α], L)
-            r_iα = dx^2 + dy^2
-            if r_iα <= (L/2)^2
-                E_int += (r_iα - 2*h_sq) / (r_iα + h_sq)^(5/2)
+            r2_iα = dx^2 + dy^2
+            if r2_iα <= (L/2)^2
+                E_int += (r2_iα - 2*h_sq) / (r2_iα + h_sq)^(5/2)
              end
         end
     end
@@ -71,9 +71,8 @@ function energy_estimators(x_A::Vector{Float64}, y_A::Vector{Float64},
                             R_match::Float64,
                             Constants::Tuple{Float64, Float64, Float64},
                             R0::Float64,
-                            r_grid::Vector{Float64},
-                            u_prime_grid::Vector{Float64},
-                            u_doubleprime_grid::Vector{Float64})::Tuple{Vector{Float64}, Vector{Float64}, Float64, Float64, Float64, Float64, Float64}
+                            itp_up,
+                            itp_upp)::Tuple{Vector{Float64}, Vector{Float64}, Float64, Float64, Float64, Float64, Float64}
 
     N_half        = length(x_A)
     drift_x         = zeros(Float64, 2*N_half)
@@ -110,8 +109,8 @@ function energy_estimators(x_A::Vector{Float64}, y_A::Vector{Float64},
             dy = get_periodic_difference(y_A[k], y_B[j], L)
             r  = sqrt(dx^2 + dy^2)
             if r > 1e-10
-                du_dr   = u_AB_prime(r, R0, r_grid, u_prime_grid)
-                d2u_dr2 = u_AB_second(r, R0, r_grid, u_doubleprime_grid)
+                du_dr   = u_AB_prime(r, R0, itp_up)
+                d2u_dr2 = u_AB_second(r, R0, itp_upp)
                 F_x         += du_dr * (dx / r)
                 F_y         += du_dr * (dy / r)
                 scalar_term += d2u_dr2 + du_dr / r
@@ -153,8 +152,8 @@ function energy_estimators(x_A::Vector{Float64}, y_A::Vector{Float64},
             dy = get_periodic_difference(y_B[γ], y_A[β], L)
             r  = sqrt(dx^2 + dy^2)
             if r > 1e-10
-                du_dr   = u_AB_prime(r, R0, r_grid, u_prime_grid)
-                d2u_dr2 = u_AB_second(r, R0, r_grid, u_doubleprime_grid)
+                du_dr   = u_AB_prime(r, R0, itp_up)
+                d2u_dr2 = u_AB_second(r, R0, itp_upp)
                 F_x         += du_dr * (dx / r)
                 F_y         += du_dr * (dy / r)
                 scalar_term += d2u_dr2 + du_dr / r

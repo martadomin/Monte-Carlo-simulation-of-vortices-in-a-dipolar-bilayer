@@ -17,6 +17,25 @@ include(normpath(joinpath(@__DIR__, "src", "jastrow.jl")))
 include(normpath(joinpath(@__DIR__, "src", "energy.jl")))
 include(normpath(joinpath(@__DIR__, "src", "metropolis.jl")))
 include(normpath(joinpath(@__DIR__, "src", "shooting_method.jl")))
+include(normpath(joinpath(@__DIR__, "src", "observables.jl")))
+
+"""
+    read_optimal_stage1(path)
+
+Parse the trailing "# Optimal R_match" block of a Stage I Rmatch sweep file:
+    # Optimal R_match
+    R_opt	E_opt
+    <value>	<value>
+Returns (R_opt, E_opt_total) as Float64. E_opt_total is the TOTAL energy
+of the N÷2 single-layer system (not per-particle).
+"""
+function read_optimal_stage1(path::String)
+    lines = readlines(path)
+    idx = findfirst(l -> occursin("Optimal R_match", l), lines)
+    idx === nothing && error("'# Optimal R_match' block not found in $path")
+    vals = split(strip(lines[idx + 2]), '\t')
+    return parse(Float64, vals[1]), parse(Float64, vals[2])
+end
 
 
 println("\n" * "="^70)
@@ -34,17 +53,9 @@ global L = sqrt(N / nr0sq)
 # Load R_match from Stage I sweep results (single-layer, N/2 particles)
 rmatch_path = joinpath(@__DIR__, "..", "Stage1_2D_Dipol_System", "data", "sweep_results",
                        "Rmatch_sweep_N$(N÷2)_nr0sq$(nr0sq/2).txt")
-print(rmatch_path)
+                       
 
-global R_match = let
-    last_line = ""
-    for line in eachline(rmatch_path)
-        if !startswith(line, "#") && !isempty(strip(line))
-            last_line = line
-        end
-    end
-    parse(Float64, split(last_line, "\t")[1])
-end
+global R_match, E_opt_single_layer_total = read_optimal_stage1(rmatch_path)
 println("✓ R_match = $R_match r₀  (loaded from $(basename(rmatch_path)))")
 
 # Interlayer separations to sweep
@@ -63,7 +74,7 @@ global tol_shoot = 1e-10
 # ──────────────────────────────────────────────────────────────────
 
 global num_steps_coarse    = 10^5    # MC steps per R0 — coarse sweep
-global num_steps_fine      = 3*10^5  # MC steps per R0 — fine sweep
+global num_steps_fine      = 10^6  # MC steps per R0 — fine sweep
 global num_steps_production = 10^6   # MC steps — production run
 global num_tune_steps      = 5000    # Steps for delta tuning
 global n_points_sweep      = 12      # Points per sweep stage
@@ -74,17 +85,17 @@ global n_points_sweep      = 12      # Points per sweep stage
 
 include(normpath(joinpath(@__DIR__, "scripts", "find_binding_energy.jl")))
 
+global Constants = calculate_constants(L, R_match)
+
 # ──────────────────────────────────────────────────────────────────
 # DERIVED QUANTITIES (recomputed inside loop for each h)
 # ──────────────────────────────────────────────────────────────────
 
-
 # Storage for results across h values
-results = Dict{Float64, NamedTuple}()
+global results = Dict{Float64, NamedTuple}()
 
 for h_val in h_vals
     global h = h_val
-    global Constants = calculate_constants(L, R_match)
 
     println("\n" * "="^70)
     println("h = $h r₀  |  N = $N  |  nr0sq = $nr0sq  |  L = $(round(L, digits=4)) r₀")
@@ -94,6 +105,9 @@ for h_val in h_vals
     println("\n--- R0 Optimization ---")
     include(normpath(joinpath(@__DIR__, "scripts", "optimize_R0.jl")))
     # optimize_R0.jl sets: R0_opt, E_opt, err_opt, energy_b_opt
+
+    # Plot the R0 sweep results for this h
+    include(normpath(joinpath(@__DIR__, "scripts", "plot_R0_sweep.jl")))
 
     println("\n  → R0_opt = $(round(R0_opt, digits=6)) r₀")
     println("  → E/N    = $(round(E_opt,  digits=6)) ± $(round(err_opt, digits=6)) ħ²/mr₀²")
@@ -125,6 +139,7 @@ println("="^70)
 println("  h (r₀)   R0_opt (r₀)   ε_b          E/N ± err  (ħ²/mr₀²)")
 println("-"^70)
 for h_val in h_vals
+    haskey(results, h_val) || continue
     r = results[h_val]
     @printf("  %-8.3f  %-12.6f  %-12.6f  %.6f ± %.6f\n",
             h_val, r.R0_opt, r.energy_b_opt, r.E_vmc, r.err_vmc)
@@ -142,6 +157,7 @@ open(summary_path, "w") do io
     println(io, "# N=$(N), nr0sq=$(nr0sq), R_match=$(R_match)")
     println(io, "# h\tR0_opt\teps_b\tE_vmc\terr_vmc")
     for h_val in h_vals
+        haskey(results, h_val) || continue
         r = results[h_val]
         println(io, "$(h_val)\t$(r.R0_opt)\t$(r.energy_b_opt)\t$(r.E_vmc)\t$(r.err_vmc)")
     end

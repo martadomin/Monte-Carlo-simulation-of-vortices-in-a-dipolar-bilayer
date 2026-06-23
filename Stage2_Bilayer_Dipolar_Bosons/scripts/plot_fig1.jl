@@ -91,5 +91,5 @@ p = scatter(
 
 display(p)
 savefig(p, normpath(joinpath(@__DIR__, "..", "data", "plots",
-        "E_per_N_and_binding_energy_N$(N)_nr0sq$(nr0sq).pdf")))
+        "Fig1_N$(N)_nr0sq$(nr0sq).pdf")))
 readline()

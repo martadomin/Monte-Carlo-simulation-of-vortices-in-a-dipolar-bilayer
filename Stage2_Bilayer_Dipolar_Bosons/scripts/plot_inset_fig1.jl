@@ -4,7 +4,7 @@ using DelimitedFiles
     read_optimal(path)
 
 Parse the `--- Optimal ---` key = value block and the L from the header comment
-of an R0 sweep file. Returns (R0_opt, E_opt, err_opt, eps_b, L).
+of a Stage II R0 sweep file. Returns (R0_opt, E_opt, err_opt, eps_b, L).
 """
 function read_optimal(path::String)
     R0_opt = E_opt = err_opt = eps_b = L = NaN
@@ -29,8 +29,31 @@ function read_optimal(path::String)
         k == "err_opt"  && (err_opt = parse(Float64, v))
         k == "energy_b" && (eps_b   = parse(Float64, v))
     end
-    isnan(L) && (L = sqrt(num_part / nr0_sq))   # fallback
+    isnan(L) && (L = sqrt(N / nr0sq))   # fallback
     return R0_opt, E_opt, err_opt, eps_b, L
+end
+
+"""
+    read_optimal_stage1(path)
+
+Parse the trailing "# Optimal R_match" block of a Stage I Rmatch sweep file.
+That block has the form:
+    # Optimal R_match
+    R_opt	E_opt
+    <value>	<value>
+i.e. a header row of *column names* (no '='), followed by one data row.
+The stored E_opt is the TOTAL energy (not per particle).
+Returns (R_opt, E_opt_total) as Float64, or (NaN, NaN) if not found.
+"""
+function read_optimal_stage1(path::String)
+    lines = readlines(path)
+    idx = findfirst(l -> occursin("Optimal R_match", l), lines)
+    idx === nothing && return NaN, NaN
+    # idx -> "# Optimal R_match", idx+1 -> "R_opt\tE_opt", idx+2 -> values
+    length(lines) < idx + 2 && return NaN, NaN
+    vals = split(strip(lines[idx + 2]), '\t')
+    length(vals) < 2 && return NaN, NaN
+    return parse(Float64, vals[1]), parse(Float64, vals[2])
 end
 
 
@@ -97,6 +120,23 @@ plot!(p,
 
 hline!(p, [0.0], color = :black, linestyle = :dash, linewidth = 1., label = "")
 
+# Plot the energy per particle for a single layer of N/2 particles
+# (independent-layer limit, h → ∞), read from the Stage I Rmatch sweep file.
+sweep_path_single_layer = joinpath(@__DIR__, "..", "..", "Stage1_2D_Dipol_System",
+                                   "data", "sweep_results",
+                                   "Rmatch_sweep_N$(N÷2)_nr0sq$(nr0sq/2).txt")
+
+R_opt_single, E_opt_single_total = read_optimal_stage1(sweep_path_single_layer)
+
+if isnan(E_opt_single_total)
+    println("Warning: could not parse single-layer optimum from $sweep_path_single_layer")
+else
+    E_opt_single = E_opt_single_total / (N ÷ 2)   # file stores TOTAL energy → convert to E/N
+    println("Single-layer E/N = $E_opt_single  (R_match = $R_opt_single)")
+    hline!(p, [E_opt_single], color = :red, linestyle = :dash, linewidth = 1.,
+           label = L"E/N\ (single\ layer)")
+end
+
 display(p)
 savefig(p, normpath(joinpath(@__DIR__, "..", "data", "plots",
-        "E_per_N_and_binding_energy_N$(N)_nr0sq$(nr0sq).pdf")))
+        "Inset_Fig1_N$(N)_nr0sq$(nr0sq).pdf")))
