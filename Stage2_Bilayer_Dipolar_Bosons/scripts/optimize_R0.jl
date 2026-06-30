@@ -17,11 +17,7 @@ Sets on exit:
 
 function run_vmc_point(R0::Float64, num_steps::Int)
     result = build_fAB(h, R0, r_min, Δ_shoot, tol_shoot, nr0sq, N)
-
-    if result === nothing
-        @warn "Unphysical solution at R0 = $R0 — skipping"
-        return NaN, NaN, NaN, NaN, NaN, NaN, NaN
-    end
+    result === nothing && return NaN, NaN, NaN, NaN, NaN, NaN, NaN
 
     r_grid, psi, itp_u, itp_up, itp_upp, energy_b = result
 
@@ -30,41 +26,44 @@ function run_vmc_point(R0::Float64, num_steps::Int)
     x_B = x_coord[N÷2+1:end];  y_B = y_coord[N÷2+1:end]
 
     delta, x_A, y_A, x_B, y_B = tune_delta(
-        x_A, y_A, x_B, y_B,
-        L, R_match, Constants, R0, itp_u;
-        target_ratio   = 0.5,
-        num_tune_steps = num_tune_steps,
-        block_size     = 100
-    )
+        x_A, y_A, x_B, y_B, L, R_match, Constants, R0, itp_u;
+        target_ratio=0.5, num_tune_steps=num_tune_steps, block_size=100)
 
-    energies, energies_drift, energies_laplacian,
-    E_avg, E_sq_avg, E_avg_drift, E_avg_laplacian, _, _, _,
-    _, _ = metropolis(
+    energies_vmc, energies_drift_vmc, energies_laplacian_vmc,
+    _, _, _, _, _, _, _, _, _ = metropolis(
         N, num_steps, delta, L, h, R_match, R0, itp_u,
         itp_up, itp_upp, Constants;
-        x_A_init = x_A, y_A_init = y_A,
-        x_B_init = x_B, y_B_init = y_B,
-        progress = false,
-        move_all = false
-    )
+        x_A_init=x_A, y_A_init=y_A, x_B_init=x_B, y_B_init=y_B,
+        progress=false, move_all=false)
 
-    n_samples = length(energies)
-    E_per_N         = E_avg / N
-    error           = sqrt(abs(E_sq_avg - E_avg^2) / n_samples) / N
-    E_drift_per_N   = E_avg_drift / N
-    error_drift     = sqrt(abs(sum(abs2, energies_drift)/n_samples - E_avg_drift^2) / n_samples) / N
-    E_lap_per_N     = E_avg_laplacian / N
-    error_laplacian = sqrt(abs(sum(abs2, energies_laplacian)/n_samples - E_avg_laplacian^2) / n_samples) / N
+    # Blocking
+    block_sizes = filter(b -> div(length(energies_vmc), b) >= 2,
+                         [10,20,30,40,50,100,150,200,300,400,500,600,700,800,900,1000,1200,1500,2000])
 
-    return E_per_N, error, energy_b, E_drift_per_N, error_drift, E_lap_per_N, error_laplacian
+    sigmas, sigmas_drift, sigmas_lap = Float64[], Float64[], Float64[]
+    for B in block_sizes
+        _, s  = blocking_statistics(energies_vmc,           B); push!(sigmas,      isnan(s)  ? 0.0 : s)
+        _, sd = blocking_statistics(energies_drift_vmc,     B); push!(sigmas_drift, isnan(sd) ? 0.0 : sd)
+        _, sl = blocking_statistics(energies_laplacian_vmc, B); push!(sigmas_lap,   isnan(sl) ? 0.0 : sl)
+    end
+
+    p  = detect_plateau(block_sizes, sigmas;      window_size=4, rtol=0.05)
+    pd = detect_plateau(block_sizes, sigmas_drift; window_size=4, rtol=0.05)
+    pl = detect_plateau(block_sizes, sigmas_lap;   window_size=4, rtol=0.05)
+
+    E_per_N,       error           = blocking_statistics(energies_vmc,           p)
+    E_drift_per_N, error_drift     = blocking_statistics(energies_drift_vmc,     pd)
+    E_lap_per_N,   error_laplacian = blocking_statistics(energies_laplacian_vmc, pl)
+
+    return E_per_N/N, error/N, energy_b, E_drift_per_N/N, error_drift/N, E_lap_per_N/N, error_laplacian/N
 end
 
 # ──────────────────────────────────────────────────────────────────
 # COARSE SWEEP
 # ──────────────────────────────────────────────────────────────────
 
-R0_min_coarse = 0.5 * h
-R0_max_coarse = min(L/2, 7.0 * h)
+R0_min_coarse = 0.0
+R0_max_coarse = L/2
 R0_vals_coarse = collect(LinRange(R0_min_coarse, R0_max_coarse, n_points_sweep))
 
 energies_coarse   = Vector{Float64}(undef, n_points_sweep)
@@ -74,6 +73,7 @@ energies_drift_coarse  = Vector{Float64}(undef, n_points_sweep)
 errors_drift_coarse    = Vector{Float64}(undef, n_points_sweep)
 energies_lap_coarse    = Vector{Float64}(undef, n_points_sweep)
 errors_lap_coarse      = Vector{Float64}(undef, n_points_sweep)
+tail_energies = Vector{Float64}(undef, n_points_sweep)
 
 println("="^70)
 println("COARSE SWEEP  (h = $h r₀)")
@@ -95,7 +95,10 @@ println("="^70 * "\n")
     errors_drift_coarse[i]   = err_drift
     energies_lap_coarse[i]   = E_lap
     errors_lap_coarse[i]     = err_lap
-    println("E/N = $(round(E_per_N, digits=6)) ± $(round(error, digits=6)) ħ²/mr₀²\n")
+    tail_energies[i]         = tail_energy(nr0sq, N, h)
+    
+    println("R_0 = $(round(R0, digits=4)) r₀  →  E/N = $(round(E_per_N, digits=6)) ± $(round(error, digits=6)) ħ²/mr₀²")
+    println("E/N + tail = $(round(E_per_N + tail_energies[i], digits=6)) ± $(round(error, digits=6)) ħ²/mr₀²\n")
 end
 
 valid = .!isnan.(energies_coarse)
@@ -127,6 +130,7 @@ energies_drift_fine = Vector{Float64}(undef, n_points_sweep)
 errors_drift_fine   = Vector{Float64}(undef, n_points_sweep)
 energies_lap_fine   = Vector{Float64}(undef, n_points_sweep)
 errors_lap_fine     = Vector{Float64}(undef, n_points_sweep)
+tail_energies_fine = Vector{Float64}(undef, n_points_sweep)
 
 println("="^70)
 println("FINE SWEEP  (h = $h r₀)")
@@ -140,6 +144,7 @@ println("="^70 * "\n")
     R0 = R0_vals_fine[i]
     println("[$i/$n_points_sweep] R0 = $(round(R0, digits=4)) r₀  (thread $(Threads.threadid()))")
     E_per_N, error, energy_b, E_drift, err_drift, E_lap, err_lap = run_vmc_point(R0, num_steps_fine)
+    
     energies_fine[i]       = E_per_N
     errors_fine[i]         = error
     eps_b_fine[i]          = energy_b
@@ -147,7 +152,9 @@ println("="^70 * "\n")
     errors_drift_fine[i]   = err_drift
     energies_lap_fine[i]   = E_lap
     errors_lap_fine[i]     = err_lap
-    println("    E/N = $(round(E_per_N, digits=6)) ± $(round(error, digits=6)) ħ²/mr₀²\n")
+    tail_energies_fine[i]  = tail_energy(nr0sq, N, h)
+    println("R_0 = $(round(R0, digits=4)) r₀  →   E/N = $(round(E_per_N, digits=6)) ± $(round(error, digits=6)) ħ²/mr₀²\n")
+    println("E/N + tail = $(round(E_per_N + tail_energies_fine[i], digits=6)) ± $(round(error, digits=6)) ħ²/mr₀²\n")
 end
 
 valid_fine = .!isnan.(energies_fine)
@@ -168,6 +175,7 @@ println("OPTIMAL R0  (h = $h r₀)")
 println("R0_opt = $(round(R0_opt,       digits=6)) r₀")
 println("ε_b    = $(round(energy_b_opt, digits=6))")
 println("E/N    = $(round(E_opt,        digits=6)) ± $(round(err_opt, digits=6)) ħ²/mr₀²")
+println("E/N + tail    = $(round(E_opt + tail_energies_fine[idx_opt], digits=6)) ± $(round(err_opt, digits=6)) ħ²/mr₀²")
 println("="^70 * "\n")
 
 # ──────────────────────────────────────────────────────────────────
@@ -206,6 +214,7 @@ open(sweep_path, "w") do io
     println(io, "energy_b    = $(energy_b_opt)")
     println(io, "E_opt       = $(E_opt)")
     println(io, "err_opt     = $(err_opt)")
+    println(io, "tail_opt    = $(tail_energies_fine[idx_opt])")
 end
 
 println("✓ Sweep results saved to: $sweep_path")

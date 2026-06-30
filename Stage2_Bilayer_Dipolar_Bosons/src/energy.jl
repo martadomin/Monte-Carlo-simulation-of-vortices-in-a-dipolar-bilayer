@@ -55,9 +55,10 @@ function local_interaction_energy(x_A::Vector{Float64}, y_A::Vector{Float64}, x_
             dx = get_periodic_difference(x_A[i], x_B[α], L)
             dy = get_periodic_difference(y_A[i], y_B[α], L)
             r2_iα = dx^2 + dy^2
+            r3D_sq = r2_iα + h_sq
             if r2_iα <= (L/2)^2
                 E_int += (r2_iα - 2*h_sq) / (r2_iα + h_sq)^(5/2)
-             end
+            end
         end
     end
 
@@ -184,3 +185,17 @@ function energy_estimators(x_A::Vector{Float64}, y_A::Vector{Float64},
            E_kin_std,
            E_int
 end
+
+function tail_energy(nr0sq::Float64, num_part::Int, h::Float64)::Float64
+    ## AA and BB contribution:
+    E_tail_AA_BB = (π * nr0sq^(3/2)) / sqrt(num_part)
+    # ## AB contribution:
+    E_tail_AB = (num_part * π)/(8*(num_part/(4*nr0sq) + h^2)^(3/2))
+
+    return E_tail_AA_BB + E_tail_AB
+end
+
+nr0sq = 1.0
+N = 60
+h = 0.3
+println("Tail energy correction = $(tail_energy(nr0sq, N, h))")

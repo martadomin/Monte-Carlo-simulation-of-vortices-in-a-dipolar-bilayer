@@ -45,3 +45,4 @@ function random_initial_config(num_part::Int, L::Float64, distribution::Abstract
     end
     return positions[1, :], positions[2, :]
 end
+

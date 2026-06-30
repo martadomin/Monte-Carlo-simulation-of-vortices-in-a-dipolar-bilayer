@@ -84,8 +84,16 @@ function build_fAB(h::Float64, R0::Float64, r_min::Float64,
     Δ = min(Δ, h^(3/2) / 20.0)
     L_box = sqrt(N / nr0sq)
 
+    if R0 <= r_min
+        r_range = range(r_min, stop=2*r_min, length=2)
+        psi = [1.0, 1.0]
+        itp_u = extrapolate(scale(interpolate([0.0, 0.0], BSpline(Linear())), r_range), Flat())
+        itp_up = extrapolate(scale(interpolate([0.0, 0.0], BSpline(Linear())), r_range), Flat())
+        itp_upp = extrapolate(scale(interpolate([0.0, 0.0], BSpline(Linear())), r_range), Flat())
+        return r_range, psi, itp_u, itp_up, itp_upp, 0.0
+    end
+
     # ε_b variacional: eigenvalor que impone ψ'(R0) = 0
-    # Distinto del ε_b físico excepto cuando R0 = L/2
     energy_b = find_energy_b(r_min, h, R0, Δ, tol)
 
     # ε_b físico: para reportar en output, usar r_max = L/2

@@ -49,9 +49,16 @@ _, _ = metropolis(
     move_all = false
 )
 
-n_samples_prod   = length(energies_prod)
-global E_production   = E_avg_prod / N
-global err_production = sqrt(abs(E_sq_avg_prod - E_avg_prod^2) / n_samples_prod) / N
+block_sizes_prod = filter(b -> div(length(energies_prod), b) >= 2,
+                          [10,20,30,40,50,100,150,200,300,400,500,600,700,800,900,1000,1200,1500,2000])
+sigmas_prod = [let (_, s) = blocking_statistics(energies_prod, B); isnan(s) ? 0.0 : s end
+               for B in block_sizes_prod]
+plateau_prod = detect_plateau(block_sizes_prod, sigmas_prod; window_size=4, rtol=0.05)
+avg_prod, sigma_prod = blocking_statistics(energies_prod, plateau_prod)
+
+global E_production   = avg_prod / N
+global err_production = sigma_prod / N
+
 
 println("="^70)
 println("PRODUCTION RESULTS  (h = $h r₀)")
@@ -71,11 +78,9 @@ open(prod_path, "w") do io
     println(io, "# N=$(N), nr0sq=$(nr0sq), h=$(h), R_match=$(R_match), R0_opt=$(R0_opt)")
     println(io, "# energy_b=$(energy_b_opt)")
     println(io, "# E/N (raw)       = $(E_production) ± $(err_production)")
-    println(io, "#")
-    println(io, "# step\tE_local")
-    for (i, e) in enumerate(energies_prod)
-        println(io, "$(i)\t$(e)")
-    end
+    println(io, "# tail_energy     = $(tail_energy(nr0sq, N, h))")
+    println(io, "# E/N + tail      = $(E_production + tail_energy(nr0sq, N, h)) ± $(err_production)")
+
 end
 
 println("✓ Production data saved to: $prod_path")

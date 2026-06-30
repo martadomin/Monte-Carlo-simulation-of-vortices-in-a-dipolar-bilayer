@@ -48,7 +48,7 @@ println("="^70 * "\n")
 
 global N       = 60               # Total particles (N/2 per layer)
 global nr0sq   = 1.0              # Areal density × r₀²
-global L = sqrt(N / nr0sq)
+global L = sqrt(N / (nr0sq))
 
 # Load R_match from Stage I sweep results (single-layer, N/2 particles)
 rmatch_path = joinpath(@__DIR__, "..", "Stage1_2D_Dipol_System", "data", "sweep_results",
@@ -71,13 +71,15 @@ global tol_shoot = 1e-10
 # ──────────────────────────────────────────────────────────────────
 
 global num_steps_coarse    = 10^6  # MC steps per R0 — coarse sweep
-global num_steps_fine      = 10^7 # MC steps per R0 — fine sweep
-global num_steps_production = 10^7  # MC steps — production run
+global num_steps_fine      = 10^6 # MC steps per R0 — fine sweep
+global num_steps_production = 10^6  # MC steps — production run
 global num_tune_steps      = 10000  # Steps for delta tuning
-global n_points_sweep      = 12      # Points per sweep stage
+global n_points_sweep      = 16    # Points per sweep stage
 
 # Interlayer separations to sweep
-global h_vals = range(0.7, 1.5, length=n_points_sweep)  # add h values here as the sweeps finish
+global h_vals = range(0.3, 1.5, step = 0.1)
+
+println(collect(h_vals))
 # ──────────────────────────────────────────────────────────────────
 # EXACT DIMER BINDING ENERGIES
 # ──────────────────────────────────────────────────────────────────
