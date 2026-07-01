@@ -194,8 +194,3 @@ function tail_energy(nr0sq::Float64, num_part::Int, h::Float64)::Float64
 
     return E_tail_AA_BB + E_tail_AB
 end
-
-nr0sq = 1.0
-N = 60
-h = 0.3
-println("Tail energy correction = $(tail_energy(nr0sq, N, h))")

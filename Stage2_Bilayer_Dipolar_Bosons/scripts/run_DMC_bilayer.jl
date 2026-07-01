@@ -1,63 +1,102 @@
-include(normpath(joinpath(@__DIR__, "..", "src", "jastrow.jl")))
-include(normpath(joinpath(@__DIR__, "..", "src", "shooting_method.jl")))
-include(normpath(joinpath(@__DIR__, "..", "src", "energy.jl")))
-include(normpath(joinpath(@__DIR__, "..", "src", "utils.jl")))
-include(normpath(joinpath(@__DIR__, "..", "src", "observables.jl")))
-include(normpath(joinpath(@__DIR__, "..", "src", "dmc.jl")))
-include(normpath(joinpath(@__DIR__, "..", "src", "metropolis.jl")))
+# scripts/run_dmc.jl
 
+# Read the optimized Rmatch from the Stage I VMC results for the AA and BB contributions.
+vmc_path_stage1 = joinpath(@__DIR__, "..", "..", "Stage1_2D_Dipol_System", "data", "results", "VMC",
+           "vmc_N$(num_part)_nr0_sq$(nr0_sq / 2).txt")
+vmc_data_stage1 = readdlm(vmc_path_stage1, '\t', String, skipstart=1)
 
-# Run single DMC at h = 1.0
-N = 60
-nr0sq = 1.0
-h_dmc   = 0.3
-N_half  = N ÷ 2
+R_match = parse(Float64, vmc_data_stage1[1, 4])
 
+# Read the R0 and energy from the Stage II VMC results
+vmc_path_stage2 = joinpath(@__DIR__, "..", "..", "Stage2_Bilayer_Dipolar_Bosons", "data", "results", "VMC",
+           "VMC_Stage2_N$(num_part)_nr0_sq$(nr0_sq)_h$(h).txt")
+vmc_data_stage2 = readdlm(vmc_path_stage2, '\t', String, skipstart=1)
 
-R0_opt      = 0.7281208690869945
-energy_b    = -11.661903206745434
-E_opt       = -0.6262732051697336 * 60
-tail_opt    = 0.807532720541924
+R0 = parse(Float64, vmc_data_stage2[1, 4])
+E_ref_initial = parse(Float64, vmc_data_stage2[1, 5]) * num_part
 
-r_min     = 1e-6
-Δ_shoot   = 1e-4
-tol_shoot = 1e-10
-
-L         = sqrt(N / nr0sq)
-R_match   = 0.8349980438651612   # from Stage I
+# Calculate Constants for the Jastrow factor/energy functions
 Constants = calculate_constants(L, R_match)
 
-# Build fAB at optimal R0 for this h
-result = build_fAB(h_dmc, R0_opt, r_min, Δ_shoot, tol_shoot, nr0sq, N)
-r_grid_dmc, psi_dmc, itp_u_dmc, itp_up_dmc, itp_upp_dmc, energy_b_dmc = result
+# Load VMC final configuration as initial config for DMC
+config_path = joinpath(@__DIR__, "..", "data", "configs",
+                       "VMC_final_config_N$(num_part)_nr0_sq$(nr0_sq)_h$(h).txt")
 
-# Initial config from VMC
-x_coord, y_coord = random_initial_config(N, L, "Uniform")
-xA_init = x_coord[1:N_half];     yA_init = y_coord[1:N_half]
-xB_init = x_coord[N_half+1:end]; yB_init = y_coord[N_half+1:end]
+config_data = readdlm(config_path, '\t', skipstart=3)  # mixed types -> no Float64 here
+layers = String.(config_data[:, 1])
+x_init = Float64.(config_data[:, 2])
+y_init = Float64.(config_data[:, 3])
 
-# Tune delta first
-delta_dmc, xA_init, yA_init, xB_init, yB_init = tune_delta(
-    xA_init, yA_init, xB_init, yB_init,
-    L, R_match, Constants, R0_opt, itp_u_dmc;
-    target_ratio = 0.5, num_tune_steps = 5000)
+# sanity check the A/B split matches your assumed ordering
+@assert all(layers[1:num_part÷2] .== "A") "Layer ordering mismatch: expected A particles first"
+@assert all(layers[num_part÷2+1:end] .== "B") "Layer ordering mismatch: expected B particles second"
 
-# DMC parameters
-Δτ = 0.0004 * 0.1       # from δ = sqrt(2D Δτ), D=0.5
-num_walkers = 400
-num_target  = 400
-num_steps   = 10^5
-E_ref_init  = E_opt * N           # use VMC energy as starting reference
+xA_init = x_init[1:num_part÷2]
+yA_init = y_init[1:num_part÷2]
+xB_init = x_init[num_part÷2+1:end]
+yB_init = y_init[num_part÷2+1:end]
 
-E_dmc, E_dmc_err, E_history = dmc(
-    xA_init, yA_init, xB_init, yB_init,
-    num_walkers, N, num_steps, Δτ,
-    L, h_dmc, R_match, Constants, R0_opt,
-    itp_up_dmc, itp_upp_dmc,
-    E_ref_init, num_target;
-    num_equil    = num_steps ÷ 5,
-    quadratic    = true,
-    plot_energy  = true
-)
+println("Loaded VMC final config from file ($(count(==("A"), layers)) A, $(count(==("B"), layers)) B)")
 
-println("DMC E/N = $(round(E_dmc/N, digits=6)) ± $(round(E_dmc_err/N, digits=6))")
+# Define the path where results will be saved
+results_path = joinpath(@__DIR__, "..", "..", "Stage2_Bilayer_Dipolar_Bosons", "data", "DMC",
+           "dmc_N$(num_part)_nr0_sq$(nr0_sq)_h$(h)_$(type_dmc).txt")
+
+# Open the file ONCE before the loop begins to write results as they finish
+open(results_path, "w") do io
+    # Write the header with num_walkers included
+    println(io, "nr0_sq\th\t\tnum_walkers\tΔτ\tE_dmc\tError_E_dmc")
+    
+    for num_walkers in num_walkers_vals
+        # The target number of walkers is typically the initial number of walkers
+        num_target = num_walkers 
+        
+        for Δτ in Δτ_vals
+            println("\nRunning DMC with num_walkers = $num_walkers and Δτ = $Δτ")
+            
+            # Run DMC, ensuring plot_energy is false to prevent execution pausing
+            E_dmc, E_dmc_err, E_history = dmc(xA_init, yA_init,
+                                             xB_init, yB_init,
+                                             num_walkers, num_part, num_steps_dmc,
+                                             Δτ, L, h,
+                                             R_match, Constants,
+                                             R0, itp_up, itp_upp,
+                                             E_ref_initial, num_target,
+                                             quadratic=quadratic,
+                                             plot_energy=false)
+
+            println("\nRaw DMC result for num_walkers = $num_walkers and Δτ = $Δτ: E = $E_dmc ± $E_dmc_err")
+
+            # Block averaging to get final energy estimates using E_history
+            block_sizes = [10, 20, 30, 40, 50, 100, 150, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000]
+            sigmas = Float64[]
+
+            for B in block_sizes
+                _, sigma = blocking_statistics(E_history, B)
+                push!(sigmas, sigma)
+            end
+
+            p = plot(block_sizes, sigmas, marker=:circle, label="DMC Error vs Block Size", xlabel="Block Size", ylabel="Error in DMC Energy", title="DMC Error Analysis for num_walkers = $num_walkers and Δτ = $Δτ")
+            display(p)
+
+            # --- AUTOMATED PLATEAU DETECTION ---
+            println("\n--- Automating Plateau Detection ---")
+            plateau_std = detect_plateau(block_sizes, sigmas, window_size=4, rtol=0.05)
+            println("Detected plateau block size for standard estimator: ", plateau_std)
+            # -----------------------------------
+
+            # Get final error at chosen block size
+            avg_energy, sigma = blocking_statistics(E_history, plateau_std)
+
+            println("\nFinal DMC result for num_walkers = $num_walkers and Δτ = $Δτ: E = $avg_energy ± $sigma (using block size = $plateau_std)")
+
+            # Write this specific run's result directly to the text file
+            println(io, "$(nr0_sq)\t$(h)\t$(num_walkers)\t$(Δτ)\t$(avg_energy)\t$(sigma)")
+            
+            # Flush ensures the line is saved to the hard drive immediately
+            flush(io) 
+        end
+    end
+end
+
+println("\nAll DMC runs complete and saved successfully to $results_path")

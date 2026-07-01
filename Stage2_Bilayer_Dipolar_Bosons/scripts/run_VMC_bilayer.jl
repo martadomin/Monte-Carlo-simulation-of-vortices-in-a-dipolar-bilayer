@@ -40,7 +40,7 @@ delta_prod, x_A, y_A, x_B, y_B = tune_delta(
 # Production run
 energies_prod, _, _,
 E_avg_prod, E_sq_avg_prod, _, _, _, _, _,
-_, _ = metropolis(
+x_coord_final, y_coord_final = metropolis(
     N, num_steps_production, delta_prod, L, h, R_match, R0_opt,
     itp_u_prod, itp_up_prod, itp_upp_prod, Constants;
     x_A_init = x_A, y_A_init = y_A,
@@ -74,15 +74,28 @@ prod_path = joinpath(@__DIR__, "..", "data", "production",
 mkpath(dirname(prod_path))
 
 open(prod_path, "w") do io
-    println(io, "# Stage 2: production VMC")
-    println(io, "# N=$(N), nr0sq=$(nr0sq), h=$(h), R_match=$(R_match), R0_opt=$(R0_opt)")
-    println(io, "# energy_b=$(energy_b_opt)")
-    println(io, "# E/N (raw)       = $(E_production) ± $(err_production)")
-    println(io, "# tail_energy     = $(tail_energy(nr0sq, N, h))")
-    println(io, "# E/N + tail      = $(E_production + tail_energy(nr0sq, N, h)) ± $(err_production)")
-
+    println(io, "N\tnr0_sq\tL\tR_opt\tE/N\tError")
+    println(io, "$(N)\t$(nr0sq)\t$(L)\t$(Float64(R0_opt))\t$(E_production)\t$(err_production)")
 end
 
 println("✓ Production data saved to: $prod_path")
 
-(; E_production, err_production, prod_path)
+# ──────────────────────────────────────────────────────────────────
+# SAVE FINAL CONFIGURATION (for DMC initialization)
+# ──────────────────────────────────────────────────────────────────
+config_path = joinpath(@__DIR__, "..", "data", "configs",
+                       "VMC_final_config_N$(N)_nr0sq$(nr0sq)_h$(h).txt")
+mkpath(dirname(config_path))
+
+open(config_path, "w") do io
+    println(io, "# Final VMC configuration for DMC initialization")
+    println(io, "# N=$(N), nr0sq=$(nr0sq), h=$(h), L=$(L), R0_opt=$(R0_opt)")
+    println(io, "# layer x y   (particles 1:N÷2 = A, N÷2+1:N = B)")
+    for i in 1:N
+        layer = i <= N÷2 ? "A" : "B"
+        println(io, "$layer\t$(x_coord_final[i])\t$(y_coord_final[i])")
+    end
+end
+println("✓ Final configuration saved to: $config_path")
+
+(; E_production, err_production, prod_path, config_path)

@@ -74,7 +74,7 @@ global num_steps_coarse    = 10^6  # MC steps per R0 — coarse sweep
 global num_steps_fine      = 10^6 # MC steps per R0 — fine sweep
 global num_steps_production = 10^6  # MC steps — production run
 global num_tune_steps      = 10000  # Steps for delta tuning
-global n_points_sweep      = 16    # Points per sweep stage
+global n_points_sweep      = 20    # Points per sweep stage
 
 # Interlayer separations to sweep
 global h_vals = range(0.3, 1.5, step = 0.1)

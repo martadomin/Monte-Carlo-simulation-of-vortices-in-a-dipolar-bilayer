@@ -249,7 +249,7 @@ function dmc(xA_init::Vector{Float64}, yA_init::Vector{Float64},
 
         # ── Population control ───────────────────────────────────────
         avg_E_post = isempty(E_loc_old_b) ? E_ref_initial : mean(E_loc_old_b)
-        E_ref      = population_control(length(xA_walkers), num_target, avg_E, Δτ)
+        E_ref      = population_control(length(xA_walkers), num_target, avg_E_post, Δτ)
 
         # ── Accumulate after equilibration ───────────────────────────
         step > num_equil && push!(E_history, avg_E_post)
