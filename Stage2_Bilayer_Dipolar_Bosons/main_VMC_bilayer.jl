@@ -46,8 +46,8 @@ println("="^70 * "\n")
 # PHYSICAL PARAMETERS
 # ──────────────────────────────────────────────────────────────────
 
-global N       = 60               # Total particles (N/2 per layer)
-global nr0sq   = 1.0              # Areal density × r₀²
+global N       = 30               # Total particles (N/2 per layer)
+global nr0sq   = 4.0              # Areal density × r₀²
 global L = sqrt(N / (nr0sq))
 
 # Load R_match from Stage I sweep results (single-layer, N/2 particles)
@@ -172,7 +172,7 @@ println("="^70 * "\n")
 # ──────────────────────────────────────────────────────────────────
 
 # Figure inset
-include(normpath(joinpath(@__DIR__, "scripts", "plot_inset_fig1.jl")))
+include(normpath(joinpath(@__DIR__, "scripts", "plot_inset_fig1_VMC.jl")))
 
 # Figure 1
-include(normpath(joinpath(@__DIR__, "scripts", "plot_fig1.jl")))
+include(normpath(joinpath(@__DIR__, "scripts", "plot_fig1_VMC.jl")))

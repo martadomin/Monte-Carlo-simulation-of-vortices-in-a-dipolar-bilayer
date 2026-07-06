@@ -4,7 +4,8 @@
 
 println("Reading results for N = $num_part, nr0^2 = $nr0_sq")
 
-pgfplotsx()
+# pgfplotsx()
+gr()
 
 # ------------------------------------------
 # Load results

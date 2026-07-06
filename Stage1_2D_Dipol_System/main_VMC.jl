@@ -15,7 +15,7 @@ include(normpath(joinpath(@__DIR__, "src", "observables.jl")))
 ## ==== VARIATIONAL MONTE CARLO SIMULATION OF 2D DIPOLAR SYSTEM ==== ##
 # Parameters
 num_part = 30
-nr0_sq_vals = [0.5]
+nr0_sq_vals = [60.0]
 
 num_steps_coarse = 10^5
 num_steps_fine = 10^6
@@ -46,7 +46,7 @@ for nr0_sq_val in nr0_sq_vals
     end
 end
 
-## Final plot comparing VMC results to DMC fit from Astrakharchik 2007
-# include(normpath(joinpath(@__DIR__, "scripts", "final_plot.jl")))
+# Final plot comparing VMC results to DMC fit from Astrakharchik 2007
+include(normpath(joinpath(@__DIR__, "scripts", "final_plot.jl")))
 
-# println("\nTotal simulation completed.")
+println("\nTotal simulation completed.")

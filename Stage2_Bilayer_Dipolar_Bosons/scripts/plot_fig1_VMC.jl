@@ -47,25 +47,20 @@ function read_optimal_stage1(path::String)
 end
 
 # ── Load exact binding energies ────────────────────────────────────
-exact_data = readdlm(normpath(joinpath(@__DIR__, "..", "data", "results", "binding_energy_dimer",
+exact_data = readdlm(normpath(joinpath(@__DIR__, "..", "data", "binding_energy_dimer",
                      "dimer_binding_energy.txt")), '\t', skipstart=1)
 h_exact  = Float64.(exact_data[:, 1])
 eb_exact = Float64.(exact_data[:, 2])
 
 # ── Load VMC sweep results ─────────────────────────────────────────
 h_found          = Float64[]
-E_minus_eb_vals_VMC  = Float64[]   # (E/N + E_tail) - ε_b/2
-err_vals_VMC         = Float64[]
+E_minus_eb_vals  = Float64[]   # (E/N + E_tail) - ε_b/2
+err_vals         = Float64[]
 
-# ── Load DMC results ─────────────────────────────────────────
-E_minus_eb_vals_DMC = Float64[]
-err_vals_DMC = Float64[]
-
-for h in h_vals_to_run
+for h in h_vals
     local sweep_path, R0_opt, E_opt, err_opt, eps_b, L_file
     local i, t, eb_exact_h, E_tail, E_corr
 
-    # Load VMC results
     sweep_path = joinpath(@__DIR__, "..", "data", "sweep_results",
                           "R0_sweep_Stage2_N$(N)_nr0sq$(nr0sq)_h$(h).txt")
     if !isfile(sweep_path)
@@ -76,22 +71,9 @@ for h in h_vals_to_run
     R0_opt, E_opt, err_opt, eps_b, L_file = read_optimal(sweep_path)
     isnan(E_opt) && continue
 
-    # Load DMC results
-    dmc_path_stage2 = joinpath(@__DIR__, "..", "data", "results", "DMC", 
-                                "DMC_Stage2_N$(N)_nr0sq$(nr0sq)_h$(h).txt")
-    if !isfile(dmc_path_stage2)
-        println("Warning: file not found for h = $h")
-        continue
-    end
-    
-    dmc_data_stage2 = readdlm(dmc_path_stage2, '\t', String, skipstart=1)
-    E_dmc = parse(Float64, dmc_data_stage2[1, 3])/N
-    E_err_dmc = parse(Float64, dmc_data_stage2[1, 4])/N
-
     # Tail correction
     E_tail = tail_energy(nr0sq, N, h)
-    E_corr_VMC = E_opt + E_tail
-    E_corr_DMC = E_dmc + E_tail
+    E_corr = E_opt + E_tail
 
     # Interpolate exact ε_b at this h
     i = searchsortedlast(h_exact, h)
@@ -101,17 +83,13 @@ for h in h_vals_to_run
 
     println("h = $(rpad(h,5))  E/N = $(round(E_opt,digits=4))  " *
             "E_tail = $(round(E_tail,digits=4))  " *
-            "E_corr_VMC = $(round(E_corr_VMC,digits=4))  " *
-            "E_corr_DMC = $(round(E_corr_DMC, digits=4))" *
+            "E_corr = $(round(E_corr,digits=4))  " *
             "ε_b/2 = $(round(eb_exact_h/2,digits=4))  " *
-            "E_corr_VMC - ε_b/2 = $(round(E_corr_VMC - eb_exact_h/2,digits=4))"*
-            "E_corr_DMC - ε_b/2 = $(round(E_corr_DMC - eb_exact_h/2,digits=4))")
+            "E_corr - ε_b/2 = $(round(E_corr - eb_exact_h/2,digits=4))")
 
     push!(h_found,         h)
-    push!(E_minus_eb_vals_VMC, E_corr_VMC - eb_exact_h / 2)
-    push!(err_vals_VMC, err_opt)
-    push!(E_minus_eb_vals_DMC, E_corr_DMC - eb_exact_h / 2)
-    push!(err_vals_DMC, E_err_dmc)
+    push!(E_minus_eb_vals, E_corr - eb_exact_h / 2)
+    push!(err_vals,        err_opt)
 end
 
 # ── Single-layer reference lines ──────────────────────────────────
@@ -122,9 +100,8 @@ end
 
 # Line 1: h → ∞ limit — single layer at nr0sq = nr0sq/2 = 0.5
 sweep_path_inf = joinpath(@__DIR__, "..", "..", "Stage1_2D_Dipol_System",
-                          "data", "sweep_results",                        
+                          "data", "sweep_results",
                           "Rmatch_sweep_N$(N÷2)_nr0sq$(nr0sq/2).txt")
-
 R_opt_inf, E_opt_inf_total = read_optimal_stage1(sweep_path_inf)
 
 E_ref_inf = NaN
@@ -156,11 +133,10 @@ end
 
 # ── Plot ───────────────────────────────────────────────────────────
 pgfplotsx()
-# gr()
 
 p = scatter(
-    h_found, E_minus_eb_vals_VMC;
-    yerror        = err_vals_VMC,
+    h_found, E_minus_eb_vals;
+    yerror        = err_vals,
     xlabel        = L"h/r_0",
     ylabel        = L"E/N - \varepsilon_b/2 \, [\hbar^2/(mr_0^2)]",
     label = L"\mathrm{VMC}",
@@ -178,13 +154,6 @@ p = scatter(
     xlims = (0.0, 1.5),
     ylims = (3.5, 4.6)
 )
-scatter!(p, h_found, E_minus_eb_vals_DMC;
-    yerror        = err_vals_DMC,
-    label         = L"\mathrm{DMC}",
-    marker        = :diamond,
-    markersize    = 8,
-    color         = :orange
-)
 
 # h → ∞ reference line
 if !isnan(E_ref_inf)
@@ -193,10 +162,21 @@ if !isnan(E_ref_inf)
            label = L"E/N\ nr_0^2 = 0.5\ \mathrm{(single\ layer)}")
 end
 
-# display(p)
+# # h → 0 dimer reference line
+# if !isnan(E_ref_dim)
+#     hline!(p, [E_ref_dim],
+#            color = :gray, linestyle = :dash, linewidth = 1.5,
+#            label = L"h \to 0\ \mathrm{limit\ (dimer)}")
+# end
+
+# # Zero line
+# hline!(p, [0.0],
+#        color = :black, linestyle = :dot, linewidth = 1., label = "")
+
+display(p)
 
 plots_dir = normpath(joinpath(@__DIR__, "..", "data", "plots"))
 mkpath(plots_dir)
-savefig(p, joinpath(plots_dir, "Fig1_N$(N)_nr0sq$(nr0sq)_def.pdf"))
-println("✓ Saved to data/plots/Fig1_N$(N)_nr0sq$(nr0sq)_def.pdf")
-# readline()
+savefig(p, joinpath(plots_dir, "Fig1_N$(N)_nr0sq$(nr0sq).pdf"))
+println("✓ Saved to data/plots/Fig1_N$(N)_nr0sq$(nr0sq).pdf")
+readline()

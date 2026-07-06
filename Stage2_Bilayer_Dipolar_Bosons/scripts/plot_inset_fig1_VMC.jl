@@ -47,24 +47,18 @@ function read_optimal_stage1(path::String)
 end
 
 # ── Load exact binding energies ────────────────────────────────────
-exact_data = readdlm(normpath(joinpath(@__DIR__, "..", "data", "results", "binding_energy_dimer",
+exact_data = readdlm(normpath(joinpath(@__DIR__, "..", "data", "binding_energy_dimer",
                      "dimer_binding_energy.txt")), '\t', skipstart=1)
 h_exact  = Float64.(exact_data[:, 1])
 eb_exact = Float64.(exact_data[:, 2])
 
 # ── Load VMC sweep results ─────────────────────────────────────────
 h_found        = Float64[]
-E_raw_vals_VMC     = Float64[]   # no tail correction
-E_corr_vals_VMC    = Float64[]   # with tail correction
-err_vals_VMC       = Float64[]
+E_raw_vals     = Float64[]   # no tail correction
+E_corr_vals    = Float64[]   # with tail correction
+err_vals       = Float64[]
 
-# ── Load DMC results ─────────────────────────────────────────
-E_raw_vals_DMC = Float64[]
-err_vals_DMC = Float64[]
-E_corr_vals_DMC = Float64[]
-
-
-for h in h_vals_to_run
+for h in h_vals
     sweep_path = joinpath(@__DIR__, "..", "data", "sweep_results",
                           "R0_sweep_Stage2_N$(N)_nr0sq$(nr0sq)_h$(h).txt")
     if !isfile(sweep_path)
@@ -74,19 +68,6 @@ for h in h_vals_to_run
     R0_opt, E_opt, err_opt, eps_b, L_file = read_optimal(sweep_path)
     isnan(E_opt) && continue
 
-     # Load DMC results
-    dmc_path_stage2 = joinpath(@__DIR__, "..", "data", "results", "DMC", 
-                                "DMC_Stage2_N$(N)_nr0sq$(nr0sq)_h$(h).txt")
-    if !isfile(dmc_path_stage2)
-        println("Warning: file not found for h = $h")
-        continue
-    end
-
-    dmc_data_stage2 = readdlm(dmc_path_stage2, '\t', String, skipstart=1)
-    E_dmc = parse(Float64, dmc_data_stage2[1, 3])/N
-    E_err_dmc = parse(Float64, dmc_data_stage2[1, 4])/N
-
-
     E_tail = tail_energy(nr0sq, N, h)
 
     println("h = $(rpad(h,5))  E/N = $(round(E_opt,digits=4))  " *
@@ -94,12 +75,9 @@ for h in h_vals_to_run
             "E/N+tail = $(round(E_opt+E_tail,digits=4))")
 
     push!(h_found,     h)
-    push!(E_raw_vals_VMC,  E_opt)
-    push!(E_corr_vals_VMC, E_opt + E_tail)
-    push!(err_vals_VMC,    err_opt)
-    push!(E_raw_vals_DMC, E_dmc)
-    push!(E_corr_vals_DMC, E_dmc + E_tail)
-    push!(err_vals_DMC, E_err_dmc)
+    push!(E_raw_vals,  E_opt)
+    push!(E_corr_vals, E_opt + E_tail)
+    push!(err_vals,    err_opt)
 end
 
 # ── Single-layer reference ─────────────────────────────────────────
@@ -124,13 +102,12 @@ end
 
 # ── Plot: ────────────────────────────────────
 pgfplotsx()
-# gr()
 
-p = scatter(h_found, E_corr_vals_VMC;
-    yerror        = err_vals_VMC,
+p = scatter(h_found, E_corr_vals;
+    yerror        = err_vals,
     xlabel        = L"h/r_0",
     ylabel        = L"E/N \, [\hbar^2/(mr_0^2)]",
-    label         = L"$\mathrm{VMC}$",
+    label         = L"VMC\ $E/N + E_{\mathrm{tail}}$",
     marker        = :circle,
     markersize    = 8,
     color         = :dodgerblue,
@@ -140,18 +117,10 @@ p = scatter(h_found, E_corr_vals_VMC;
     tickfontsize  = 15,
     guidefontsize = 17,
     legendfontsize = 15,
-    legendposition = :right,
+    legendposition = :topleft,
     xlims = (0.0, 1.51),
     ylims = (-2.01, 5.0),
     size  = (900, 600),
-)
-
-scatter!(p, h_found, E_corr_vals_DMC;
-    yerror        = err_vals_DMC,
-    label         = L"$\mathrm{DMC}$",
-    marker        = :diamond,
-    markersize    = 8,
-    color         = :orange
 )
 
 plot!(p, h_exact, eb_exact ./ 2;
@@ -164,10 +133,10 @@ hline!(p, [0.0];
     color = :red, linestyle = :dash, linewidth = 1.0,
     label = L"E/N\ nr_0^2 = 0.5\ \mathrm{(single\ layer)}")
 
-# display(p)
+display(p)
 
 plots_dir = normpath(joinpath(@__DIR__, "..", "data", "plots"))
 mkpath(plots_dir)
 savefig(p, joinpath(plots_dir,
-        "Inset_Fig1_N$(N)_nr0sq$(nr0sq)_def.pdf"))
-println("✓ Saved to data/plots/Inset_Fig1_N$(N)_nr0sq$(nr0sq)_def.pdf")
+        "Inset_Fig1_N$(N)_nr0sq$(nr0sq).pdf"))
+println("✓ Saved to data/plots/Inset_Fig1_N$(N)_nr0sq$(nr0sq).pdf")

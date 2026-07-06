@@ -1,4 +1,4 @@
-ENV["PATH"] = "C:\\Users\\marta\\AppData\\Local\\Programs\\MiKTeX\\miktex\\bin\\x64;" * ENV["PATH"]
+# ENV["PATH"] = "C:\\Users\\marta\\AppData\\Local\\Programs\\MiKTeX\\miktex\\bin\\x64;" * ENV["PATH"]
 using DelimitedFiles, Plots, LaTeXStrings, PGFPlotsX
 
 E_vmc = Float64[]
@@ -41,8 +41,8 @@ println(E_fit_data_normalized)
 
 println("Relative error DMC vs paper fit: ", round.(abs.(E_dmc .- E_fit_data_normalized) ./ abs.(E_fit_data_normalized) * 100, sigdigits=3), "%")
 
-pgfplotsx()
-# gr()
+# pgfplotsx()
+gr()
 
 xticks_vals = [0.0, 50.0, 100.0, 150.0, 200.0, 250.0, 300.0]
 xticks_labels = [L"0", L"50", L"100", L"150", L"200", L"250", L"300"]

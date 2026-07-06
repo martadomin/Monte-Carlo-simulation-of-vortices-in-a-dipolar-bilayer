@@ -98,6 +98,7 @@ function dmc(xA_init::Vector{Float64}, yA_init::Vector{Float64},
 
     mode = quadratic ? "Quadratic DMC" : "Linear DMC"
     println(mode)
+    flush(stdout)
     prog = Progress(num_steps; desc="Running $mode...", showspeed=true)
 
     # ── Main DMC loop ────────────────────────────────────────────────
@@ -259,6 +260,7 @@ function dmc(xA_init::Vector{Float64}, yA_init::Vector{Float64},
             println("\nStep $step: walkers=$(length(xA_walkers)), " *
                     "E/N=$(round(avg_E/num_part, digits=5)), " *
                     "E_ref/N=$(round(E_ref/num_part, digits=5))")
+            flush(stdout)
         end
     end
 

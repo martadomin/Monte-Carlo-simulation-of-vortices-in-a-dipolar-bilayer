@@ -9,20 +9,31 @@ include(normpath(joinpath(@__DIR__, "..", "src", "dmc.jl")))
 include(normpath(joinpath(@__DIR__, "..", "src", "shooting_method.jl")))
 include(normpath(joinpath(@__DIR__, "..", "src", "observables.jl")))
 
+# const INTERACTIVE_MODE = !haskey(ENV, "SLURM_JOB_ID")
+
+# if INTERACTIVE_MODE && Sys.which("lualatex") !== nothing
+#     pgfplotsx()
+#     println("Backend: PGFPlotsX (entorno local con LaTeX)")
+# else
+#     gr()
+#     println("Backend: GR (clúster o sin LaTeX disponible)")
+# end
+
 # ── Parameters ────────────────────────────────────────────────────────────────
 N             = 60
 nr0sq         = 1.0
 h_vals        = range(0.3, 0.3, step = 0.1)           # sweep over interlayer separations
-num_walkers_list = [100]
+num_walkers_list = [1000]
 quadratic     = true
 type_dmc      = quadratic ? "quadratic" : "linear"
 total_time    = 20.0
 equil_time    = 4.0
-τ_factors     = [0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 7.5, 10.0]
+τ_factors     = [0.1]
 
 r_min     = 1e-6
 Δ_shoot   = 1e-4
 tol_shoot = 1e-10
+
 
 # ── R_match (Stage I, AA/BB — h-independent) ────────────────────────────────
 # Path depth and filename convention must match find_delta_bilayer.jl exactly:
@@ -133,11 +144,11 @@ for h in h_vals
 
                 plateau = detect_plateau(block_sizes, sigmas, window_size=4, rtol=0.02)
 
-                p = plot(block_sizes, sigmas, marker=:o,
-                         xlabel="Block Size", ylabel="Std. Error",
-                         title="Blocking Analysis (h=$h, Δτ=$(round(Δτ, sigdigits=3)))")
-                vline!([plateau], label="Plateau Block Size = $plateau", linestyle=:dash, color=:red)
-                display(p)
+                # p = plot(block_sizes, sigmas, marker=:o,
+                #          xlabel="Block Size", ylabel="Std. Error",
+                #          title="Blocking Analysis (h=$h, Δτ=$(round(Δτ, sigdigits=3)))")
+                # vline!([plateau], label="Plateau Block Size = $plateau", linestyle=:dash, color=:red)
+                # INTERACTIVE_MODE && display(p)
 
                 avg_E, σ = blocking_statistics(E_history, plateau)
 
@@ -164,11 +175,12 @@ for h in h_vals
 
             hline!(p_conv, [E_ref_initial / N]; linestyle=:dash, color=:red, label="VMC result")
 
-            display(p_conv)
+            # if INTERACTIVE_MODE
+            #     display(p_conv)
+            #     readline()
+            # end
 
-            readline()  # pause to view plot
-
-            plot_path = joinpath(@__DIR__, "..", "data", "results", "DMC",
+            plot_path = joinpath(@__DIR__, "..", "data", "plots", "DMC",
                         "convergence_plot_bilayer_N$(N)_nr0sq$(nr0sq)_h$(h)_Nw$(num_walkers)_$(type_dmc).pdf")
 
             savefig(p_conv, plot_path)

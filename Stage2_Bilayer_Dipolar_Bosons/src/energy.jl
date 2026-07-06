@@ -194,3 +194,6 @@ function tail_energy(nr0sq::Float64, num_part::Int, h::Float64)::Float64
 
     return E_tail_AA_BB + E_tail_AB
 end
+
+
+print(tail_energy(1.0, 60, 0.3))
