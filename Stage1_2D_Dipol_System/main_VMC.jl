@@ -15,8 +15,8 @@ include(normpath(joinpath(@__DIR__, "src", "observables.jl")))
 ## ==== VARIATIONAL MONTE CARLO SIMULATION OF 2D DIPOLAR SYSTEM ==== ##
 # Parameters
 num_part = 30
-nr0_sq_vals = [60.0]
-
+nr0_sq_vals = [0.005]
+ 
 num_steps_coarse = 10^5
 num_steps_fine = 10^6
 num_steps_production = 10^6
@@ -40,9 +40,9 @@ for nr0_sq_val in nr0_sq_vals
         println("\n=== Stage 2: Production VMC Run ===")
         include(normpath(joinpath(@__DIR__, "scripts", "run_vmc.jl")))
 
-        # Third step: plots
-        println("\n=== Stage 3: Generating Plots ===")
-        include(normpath(joinpath(@__DIR__, "scripts", "plot_results.jl")))
+        # # Third step: plots
+        # println("\n=== Stage 3: Generating Plots ===")
+        # include(normpath(joinpath(@__DIR__, "scripts", "plot_results.jl")))
     end
 end
 

@@ -8,7 +8,7 @@ using Plots, LaTeXStrings, Base.Threads
 R_inf  = L / 2        # large enough that ψ_b has decayed
 energy_b_vals = Float64[]
 
-open(normpath(joinpath(@__DIR__, "..", "data", "results", "binding_energy_dimer",
+open(normpath(joinpath(@__DIR__, "..", "data", "binding_energy_dimer",
               "dimer_binding_energy.txt")), "w") do io
     println(io, "# h/r0    ε_b")
     for h in h_vals
