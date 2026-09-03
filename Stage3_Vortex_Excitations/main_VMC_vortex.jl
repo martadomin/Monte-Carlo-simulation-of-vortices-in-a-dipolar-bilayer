@@ -15,7 +15,8 @@ nr0sq    = 1.0
 L        = sqrt(N / nr0sq)
 l        = 1.0                              # vortex circulation
 h_vals   = range(0.7, 0.7, step = 0.1)       # sweep over interlayer separations
-num_steps_production = 10^7
+num_steps_production = 10^6
+num_bins = 100                               # density/current grid resolution, matches metropolis() default
 
 r_min     = 1e-6
 Δ_shoot   = 1e-4
@@ -85,6 +86,14 @@ for h in h_vals
     E_int_arr           = fill(NaN, n_d)
     acc_arr             = fill(NaN, n_d)
 
+    # Density maps per d — filled inside the threaded loop (array writes are
+    # thread-safe here since each thread writes to its own idx slice only),
+    # plotted afterward in the sequential I/O loop (Plots.jl/GR is NOT
+    # thread-safe, so no plotting call may happen inside @threads).
+    n_xy_A_all  = zeros(Float64, num_bins, num_bins, n_d)
+    n_xy_B_all  = zeros(Float64, num_bins, num_bins, n_d)
+    xy_bins_ref = Ref{Vector{Float64}}()   # bins identical for every d (same L, num_bins) — store once
+
     # Each d is an independent VMC chain — no warm-start chaining across d
     # once threaded (there's no well-defined "previous d" when chains run
     # concurrently), so every thread starts from its own random configuration.
@@ -106,14 +115,16 @@ for h in h_vals
 
         energies, energies_drift, energies_laplacian,
         E_tot, E_sq, E_tot_drift, E_tot_laplacian,
-        E_kin, E_int, acc_ratio, x_coord, y_coord =
+        E_kin, E_int, acc_ratio, x_coord, y_coord,
+        n_xy_A, n_xy_B, xy_bins,
+        gAA_r, gBB_r, gAB_r, g_total_r, r_vals =
             metropolis(num_part, num_steps_production, delta_tuned, L, h,
                        R_match, R0, itp_u, itp_up, itp_upp, Constants;
                        x_vortex_A=x_vortex_A, y_vortex_A=y_vortex_A,
                        x_vortex_B=x_vortex_B, y_vortex_B=y_vortex_B, l=l,
                        x_A_init=x_A_t, y_A_init=y_A_t,
                        x_B_init=x_B_t, y_B_init=y_B_t,
-                       progress=false)
+                       progress=false, num_bins=num_bins)
 
         # Block-average all three estimators independently, matching run_vmc.jl:
         # each gets its own plateau, since drift/Laplacian have different
@@ -145,6 +156,10 @@ for h in h_vals
         E_int_arr[idx]           = E_int
         acc_arr[idx]             = acc_ratio
 
+        n_xy_A_all[:, :, idx] = n_xy_A
+        n_xy_B_all[:, :, idx] = n_xy_B
+        idx == 1 && (xy_bins_ref[] = xy_bins)   # bins are identical across d, store once
+
         println("[thread $(Threads.threadid())] h=$h, d=$d done: " *
                 "E_std=$(E_tot_b/num_part) ± $(E_err_b/num_part) (block=$plateau_std)  acc=$acc_ratio")
     end
@@ -163,7 +178,10 @@ for h in h_vals
     E_vortex_laplacian_arr     = E_tot_laplacian_arr .- E0
     E_vortex_laplacian_err_arr = sqrt.(E_err_laplacian_arr.^2 .+ err_E0^2)
 
-    # ── Sequential I/O and plot accumulation, in d order ────────────────────
+    # ── Sequential I/O, plot accumulation, and density-map plotting, in d order ──
+    # (all Plots.jl/GR calls happen here, outside @threads, since GR is not thread-safe)
+    xy_bins = xy_bins_ref[]
+
     open(results_path, "w") do io
         println(io, "d\tE_tot\tE_tot_err\tE_vortex\tE_vortex_err\t" *
                      "E_drift\tE_drift_err\tE_laplacian\tE_laplacian_err\tE_kin\tE_int\tacceptance")
@@ -183,6 +201,24 @@ for h in h_vals
             push!(E_drift_err, E_vortex_drift_err_arr[idx] / num_part)
             push!(E_laplacian, E_vortex_laplacian_arr[idx] / num_part)
             push!(E_laplacian_err, E_vortex_laplacian_err_arr[idx] / num_part)
+
+            # ── Density map n(x,y) for layers A and B, this d ──────────────
+            # Transpose: accumulate_density! fills n_xy[bin_x, bin_y], but
+            # Plots.heatmap(x, y, z) expects z indexed [row=y, col=x].
+            x_vortex_A, y_vortex_A = L/2, L/2
+            x_vortex_B, y_vortex_B = L/2 + d, L/2
+
+            p_density = plot(
+                heatmap(xy_bins, xy_bins, n_xy_A_all[:, :, idx]'; title="Layer A", c=:viridis, aspect_ratio=:equal),
+                heatmap(xy_bins, xy_bins, n_xy_B_all[:, :, idx]'; title="Layer B", c=:viridis, aspect_ratio=:equal),
+                layout = (1, 2), size = (900, 400),
+                plot_title = L"n(x,y),\ \ h=%$h,\ d=%$(round(d, digits=3)),\ \ell=%$l"
+            )
+            scatter!(p_density[1], [x_vortex_A], [y_vortex_A]; marker=:xcross, ms=8, mc=:red, label="core A")
+            scatter!(p_density[2], [x_vortex_B], [y_vortex_B]; marker=:xcross, ms=8, mc=:red, label="core B")
+
+            density_fig_path = joinpath(plots_path, "density_N$(num_part)_h$(h)_d$(round(d, digits=3))_l$(l).pdf")
+            savefig(p_density, density_fig_path)
         end
     end
 
@@ -209,4 +245,5 @@ for h in h_vals
 
     println("\nVortex offset sweep complete for h=$h. Results saved to $results_path")
     println("Plot saved to $fig_path")
+    println("Density maps saved to $plots_path (one PDF per d)")
 end

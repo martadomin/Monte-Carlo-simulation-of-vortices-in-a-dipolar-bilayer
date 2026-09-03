@@ -271,8 +271,11 @@ function metropolis(
     move_all::Bool          = false
 )::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64},
          Float64, Float64, Float64, Float64, Float64, Float64, Float64,
-         Vector{Float64}, Vector{Float64}}
-
+         Vector{Float64}, Vector{Float64},
+         Matrix{Float64}, Matrix{Float64}, Vector{Float64},
+         Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}, 
+         Vector{Float64}}
+         
     N_half = num_part ÷ 2
 
     acceptance_ratio  = 0.0
@@ -289,13 +292,17 @@ function metropolis(
     energies_laplacian= Float64[]
     energy_plot       = Float64[]
     step_plot         = Int[]
-    g_r               = zeros(Float64, num_bins)
+    gAA_r               = zeros(Float64, num_bins)
+    gBB_r               = zeros(Float64, num_bins)
+    gAB_r               = zeros(Float64, num_bins)
     n_gr_samples      = 0
     E_local           = NaN
     E_local_drift     = NaN
     E_local_laplacian = NaN
     E_kinetic         = NaN
     E_potential       = NaN
+    n_xy_A            = zeros(Float64, num_bins, num_bins)
+    n_xy_B            = zeros(Float64, num_bins, num_bins)
 
     # ── Initial configuration ────────────────────────────────────────
     if any(isnothing, (x_A_init, y_A_init, x_B_init, y_B_init))
@@ -374,6 +381,15 @@ function metropolis(
             E_tot_laplacian += E_local_laplacian
             n_uncorr        += 1
 
+            # Accumulate n_xy_A and n_xy_B
+            accumulate_density!(n_xy_A, x_A, y_A, L)
+            accumulate_density!(n_xy_B, x_B, y_B, L)
+
+            # Accumulate gr
+            accumulate_gr!(gAA_r, x_A, y_A, L)
+            accumulate_gr!(gBB_r, x_B, y_B, L)
+            accumulate_g_AB_r!(gAB_r, x_A, y_A, x_B, y_B, L)
+
             if i % plot_every == 0
                 push!(step_plot,   i)
                 push!(energy_plot, E_local_drift / num_part)
@@ -399,16 +415,20 @@ function metropolis(
     x_coord = vcat(x_A, x_B)
     y_coord = vcat(y_A, y_B)
 
-    return energies,
-           energies_drift,
-           energies_laplacian,
-           E_tot           / n_uncorr,
-           E_sq            / n_uncorr,
-           E_tot_drift     / n_uncorr,
-           E_tot_laplacian / n_uncorr,
-           E_kin           / n_uncorr,
-           E_int           / n_uncorr,
-           acceptance_ratio / num_steps,
-           x_coord,
-           y_coord
+    g_total_r = gAA_r .+ gBB_r .+ 2 .* gAB_r
+
+    xy_bins = normalize_density!(n_xy_A, n_uncorr, L)
+    normalize_density!(n_xy_B, n_uncorr, L)
+
+    r_vals = normalize_gr!(gAA_r, N_half, L, n_gr_samples)
+    normalize_gr!(gBB_r, N_half, L, n_gr_samples)
+    normalize_gr!(gAB_r, N_half, L, n_gr_samples)
+    normalize_gr!(g_total_r, num_part, L, n_gr_samples)
+
+    return energies, energies_drift, energies_laplacian,
+           E_tot/n_uncorr, E_sq/n_uncorr, E_tot_drift/n_uncorr, E_tot_laplacian/n_uncorr,
+           E_kin/n_uncorr, E_int/n_uncorr, acceptance_ratio/num_steps,
+           x_coord, y_coord,
+           n_xy_A, n_xy_B, xy_bins,
+           gAA_r, gBB_r, gAB_r, g_total_r, r_vals
 end
