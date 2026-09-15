@@ -13,9 +13,10 @@ N        = 60
 num_part = N
 nr0sq    = 1.0
 L        = sqrt(N / nr0sq)
-l        = 1.0                              # vortex circulation
-h_vals   = range(0.7, 0.7, step = 0.1)       # sweep over interlayer separations
-num_steps_production = 10^6
+lA        = 1.0                              # vortex circulation for layer A
+lB        = 1.0                              # vortex circulation for layer B
+h_vals   = range(0.3, 1.1, step = 0.7)       # sweep over interlayer separations
+num_steps_production = 10^7
 num_bins = 100                               # density/current grid resolution, matches metropolis() default
 
 r_min     = 1e-6
@@ -32,9 +33,11 @@ Constants = calculate_constants(L, R_match)
 
 # Output directory for the plots (defined once, outside the h loop)
 plots_path = joinpath(@__DIR__, "data", "results", "VortexSweep", "plots")
+data_path = joinpath(@__DIR__, "data", "results", "VortexSweep", "data")
 mkpath(plots_path)
+mkpath(data_path)
 
-for h in h_vals
+@threads for h in h_vals
 
     # R0 and the AB splines DO depend on h — reload/rebuild per h
     nr0sq_str = @sprintf("%.1f", nr0sq)
@@ -51,7 +54,8 @@ for h in h_vals
         build_fAB(h, R0, r_min, Δ_shoot, tol_shoot, nr0sq, N)
 
 
-    d_vals = collect(0.0:0.05*(L/4):L/4)
+    # d_vals = collect(0.0:0.05*(L/4):L/4)
+    d_vals = [1.936]
 
     # ── Baseline is the Stage II scalar E0 ± err_E0 (single number, no
     # d-dependence) — at l=0 the Stage III ansatz reduces exactly to the
@@ -60,7 +64,7 @@ for h in h_vals
     # what l this run uses. No special-casing l==0 is needed anymore.
 
     results_path = joinpath(@__DIR__, "data", "results", "VortexSweep",
-                             "vortex_energy_vs_offset_N$(num_part)_h$(h)_l$(l).txt")
+                             "vortex_energy_vs_offset_N$(num_part)_h$(h)_lA$(lA)_lB$(lB).txt")
 
     mkpath(dirname(results_path))
 
@@ -109,7 +113,7 @@ for h in h_vals
         delta_tuned, x_A_t, y_A_t, x_B_t, y_B_t = tune_delta(
             x_A_i, y_A_i, x_B_i, y_B_i,
             L, R_match, Constants,
-            x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, l,
+            x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, lA, lB,
             R0, itp_u
         )
 
@@ -121,10 +125,10 @@ for h in h_vals
             metropolis(num_part, num_steps_production, delta_tuned, L, h,
                        R_match, R0, itp_u, itp_up, itp_upp, Constants;
                        x_vortex_A=x_vortex_A, y_vortex_A=y_vortex_A,
-                       x_vortex_B=x_vortex_B, y_vortex_B=y_vortex_B, l=l,
+                       x_vortex_B=x_vortex_B, y_vortex_B=y_vortex_B, lA=lA,lB =lB,
                        x_A_init=x_A_t, y_A_init=y_A_t,
                        x_B_init=x_B_t, y_B_init=y_B_t,
-                       progress=false, num_bins=num_bins)
+                       progress=true, num_bins=num_bins)
 
         # Block-average all three estimators independently, matching run_vmc.jl:
         # each gets its own plateau, since drift/Laplacian have different
@@ -165,12 +169,6 @@ for h in h_vals
     end
 
     # ── Baseline subtraction against the Stage II scalar E0 ± err_E0 ───────
-    # Applied identically to all three estimators (std, drift, laplacian), so
-    # that the Eq. 70 three-estimator cross-check is performed on genuinely
-    # comparable (baseline-subtracted) quantities, not a mix of subtracted
-    # and raw values. E0 is d-independent, so it is subtracted the same way
-    # from every d point, for any l (no l==0 special-casing needed since E0
-    # comes from an external Stage II file, not from this script's own output).
     E_vortex_arr               = E_tot_arr           .- E0
     E_vortex_err_arr           = sqrt.(E_err_arr.^2           .+ err_E0^2)
     E_vortex_drift_arr         = E_tot_drift_arr     .- E0
@@ -181,6 +179,9 @@ for h in h_vals
     # ── Sequential I/O, plot accumulation, and density-map plotting, in d order ──
     # (all Plots.jl/GR calls happen here, outside @threads, since GR is not thread-safe)
     xy_bins = xy_bins_ref[]
+
+    bins_path = joinpath(data_path, "xy_bins_N$(num_part).txt")
+    isfile(bins_path) || writedlm(bins_path, xy_bins)
 
     open(results_path, "w") do io
         println(io, "d\tE_tot\tE_tot_err\tE_vortex\tE_vortex_err\t" *
@@ -203,8 +204,6 @@ for h in h_vals
             push!(E_laplacian_err, E_vortex_laplacian_err_arr[idx] / num_part)
 
             # ── Density map n(x,y) for layers A and B, this d ──────────────
-            # Transpose: accumulate_density! fills n_xy[bin_x, bin_y], but
-            # Plots.heatmap(x, y, z) expects z indexed [row=y, col=x].
             x_vortex_A, y_vortex_A = L/2, L/2
             x_vortex_B, y_vortex_B = L/2 + d, L/2
 
@@ -212,13 +211,18 @@ for h in h_vals
                 heatmap(xy_bins, xy_bins, n_xy_A_all[:, :, idx]'; title="Layer A", c=:viridis, aspect_ratio=:equal),
                 heatmap(xy_bins, xy_bins, n_xy_B_all[:, :, idx]'; title="Layer B", c=:viridis, aspect_ratio=:equal),
                 layout = (1, 2), size = (900, 400),
-                plot_title = L"n(x,y),\ \ h=%$h,\ d=%$(round(d, digits=3)),\ \ell=%$l"
+                plot_title = L"n(x,y),\ \ h=%$h,\ d=%$(round(d, digits=3)),\ \ell=%$lA, %$lB"
             )
             scatter!(p_density[1], [x_vortex_A], [y_vortex_A]; marker=:xcross, ms=8, mc=:red, label="core A")
             scatter!(p_density[2], [x_vortex_B], [y_vortex_B]; marker=:xcross, ms=8, mc=:red, label="core B")
 
-            density_fig_path = joinpath(plots_path, "density_N$(num_part)_h$(h)_d$(round(d, digits=3))_l$(l).pdf")
+            density_fig_path = joinpath(plots_path, "density_N$(num_part)_h$(h)_d$(round(d, digits=3))_lA$(lA)_lB$(lB).pdf")
             savefig(p_density, density_fig_path)
+
+            nA_path = joinpath(data_path, "nxyA_N$(num_part)_h$(h)_d$(round(d, digits=3))_lA$(lA)_lB$(lB).txt")
+            nB_path = joinpath(data_path, "nxyB_N$(num_part)_h$(h)_d$(round(d, digits=3))_lA$(lA)_lB$(lB).txt")
+            writedlm(nA_path, n_xy_A_all[:, :, idx])
+            writedlm(nB_path, n_xy_B_all[:, :, idx])
         end
     end
 
@@ -230,7 +234,7 @@ for h in h_vals
               label      = "local (std)",
               xlabel     = L"d\ /\ (L/2)",
               ylabel     = L"E_{vortex}/N\ \ (\varepsilon_0)",
-              title      = L"h = %$h,\ \ell = %$l",
+              title      = L"h = %$h,\ \ell = %$lA, %$lB",
               legend     = :topright,
               framestyle = :box,
               grid       = true,
@@ -240,7 +244,7 @@ for h in h_vals
     scatter!(p, d_recorded, E_laplacian; yerror = E_laplacian_err, label = "laplacian")
 
     display(p)
-    fig_path = joinpath(plots_path, "vortex_energy_vs_offset_N$(num_part)_h$(h)_l$(l).pdf")
+    fig_path = joinpath(plots_path, "vortex_energy_vs_offset_N$(num_part)_h$(h)_lA$(lA)_lB$(lB).pdf")
     savefig(p, fig_path)
 
     println("\nVortex offset sweep complete for h=$h. Results saved to $results_path")

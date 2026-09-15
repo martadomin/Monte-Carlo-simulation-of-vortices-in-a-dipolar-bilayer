@@ -69,7 +69,7 @@ function phase_external_potential(x_A::Vector{Float64}, y_A::Vector{Float64},
                                  x_B::Vector{Float64}, y_B::Vector{Float64},
                                  x_vortex_A::Float64, y_vortex_A::Float64,
                                  x_vortex_B::Float64, y_vortex_B::Float64,
-                                 L::Float64, l::Float64, rho2_min::Float64=1e-16)::Float64
+                                 L::Float64, lA::Float64, lB::Float64, rho2_min::Float64=1e-16)::Float64
     N_half = length(x_A)
     @assert length(y_A) == N_half && length(x_B) == N_half && length(y_B) == N_half "Input coordinate vectors must have the same length"
 
@@ -85,7 +85,7 @@ function phase_external_potential(x_A::Vector{Float64}, y_A::Vector{Float64},
         rho2_A = max(dx_A^2 + dy_A^2, rho2_min)
         rho2_B = max(dx_B^2 + dy_B^2, rho2_min)
 
-        V_ext += 0.5 * (l^2) / (rho2_A) + 0.5 * (l^2) / (rho2_B)        
+        V_ext += 0.5 * (lA^2) / (rho2_A) + 0.5 * (lB^2) / (rho2_B)        
     end
     return V_ext
 end
@@ -94,7 +94,7 @@ function energy_estimators(x_A::Vector{Float64}, y_A::Vector{Float64},
                             x_B::Vector{Float64}, y_B::Vector{Float64},
                             x_vortex_A::Float64, y_vortex_A::Float64,
                             x_vortex_B::Float64, y_vortex_B::Float64,
-                            L::Float64, h::Float64, l::Float64,
+                            L::Float64, h::Float64, lA::Float64, lB::Float64,
                             R_match::Float64,
                             Constants::Tuple{Float64, Float64, Float64},
                             R0::Float64,
@@ -151,8 +151,8 @@ function energy_estimators(x_A::Vector{Float64}, y_A::Vector{Float64},
         dy = get_periodic_difference(y_A[k], y_vortex_A, L)
         r  = sqrt(dx^2 + dy^2)
         if r > 1e-10
-            du_dr   = u_vortex_prime(r, l, L)
-            d2u_dr2 = u_vortex_second(r, l, L)
+            du_dr   = u_vortex_prime(r, lA, L)
+            d2u_dr2 = u_vortex_second(r, lA, L)
             F_x         += du_dr * (dx / r)
             F_y         += du_dr * (dy / r)
             scalar_term += d2u_dr2 + du_dr / r
@@ -206,8 +206,8 @@ function energy_estimators(x_A::Vector{Float64}, y_A::Vector{Float64},
         dy = get_periodic_difference(y_B[γ], y_vortex_B, L)
         r  = sqrt(dx^2 + dy^2)
         if r > 1e-10
-            du_dr   = u_vortex_prime(r, l, L)
-            d2u_dr2 = u_vortex_second(r, l, L)
+            du_dr   = u_vortex_prime(r, lB, L)
+            d2u_dr2 = u_vortex_second(r, lB, L)
             F_x         += du_dr * (dx / r)
             F_y         += du_dr * (dy / r)
             scalar_term += d2u_dr2 + du_dr / r
@@ -226,7 +226,7 @@ function energy_estimators(x_A::Vector{Float64}, y_A::Vector{Float64},
     # External potential energy
     E_phase = phase_external_potential(x_A, y_A, x_B, y_B,
                                         x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B,
-                                        L, l)
+                                        L, lA, lB)
 
     # Three kinetic estimators
     E_kin_std       = -0.5  * E_kin

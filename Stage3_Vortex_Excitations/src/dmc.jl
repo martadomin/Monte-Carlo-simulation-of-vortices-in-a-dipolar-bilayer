@@ -32,7 +32,7 @@ end
         num_walkers, num_part, num_steps, Δτ,
         L, h, R_match, Constants, R0, itp_up, itp_upp,
         E_ref_initial, num_target;
-        num_equil, quadratic, plot_energy)
+        num_equil, quadratic, plot_energy, num_bins)
 
 Diffusion Monte Carlo for the bilayer dipolar system.
 Supports both linear DMC and quadratic (2nd-order) DMC via the `quadratic` flag.
@@ -43,12 +43,23 @@ Supports both linear DMC and quadratic (2nd-order) DMC via the `quadratic` flag.
 - `energy_estimators` requires h, R0, itp_up, itp_upp
 - Drift forces are split into layer A (indices 1:N/2) and layer B (N/2+1:N)
   from the single `drift_x, drift_y` vector returned by energy_estimators
+
+# Density / g(r) accumulation (mixed estimator)
+n(x,y) and g(r) are accumulated from the POST-BRANCHING walker population,
+once per step past equilibration (no thinning currently — every step past
+num_equil contributes). This is the standard DMC mixed-estimator convention:
+after `branching_step`, a walker that produced k copies literally appears k
+times in `xA_walkers` etc., so looping once over every entry already carries
+the correct branching weight — no extra multiplication by `weights` or
+`num_copies` is needed. Accumulation is done in a plain sequential loop, NOT
+inside `@threads`, since `accumulate_density!`/`accumulate_gr!` mutate shared
+arrays with `+=`, which races under concurrent writes from multiple threads.
 """
 function dmc(xA_init::Vector{Float64}, yA_init::Vector{Float64},
              xB_init::Vector{Float64}, yB_init::Vector{Float64},
              num_walkers::Int, num_part::Int, num_steps::Int,
              Δτ::Float64, L::Float64, h::Float64,
-             l::Float64, R_match::Float64,
+             lA::Float64, lB::Float64, R_match::Float64,
              Constants::Tuple{Float64, Float64, Float64},
              x_vortex_A::Float64, y_vortex_A::Float64,
              x_vortex_B::Float64, y_vortex_B::Float64,
@@ -56,7 +67,8 @@ function dmc(xA_init::Vector{Float64}, yA_init::Vector{Float64},
              E_ref_initial::Float64, num_target::Int;
              num_equil::Int  = num_steps ÷ 5,
              quadratic::Bool = false,
-             plot_energy::Bool = false)
+             plot_energy::Bool = false,
+             num_bins::Int    = 100)
 
     D      = 0.5
     N_half = num_part ÷ 2
@@ -88,11 +100,20 @@ function dmc(xA_init::Vector{Float64}, yA_init::Vector{Float64},
     new_xB       = Vector{Vector{Float64}}(undef, num_walkers)
     new_yB       = Vector{Vector{Float64}}(undef, num_walkers)
 
+    # ── Pre-allocate density / g(r) accumulators ─────────────────────
+    n_xy_A       = zeros(Float64, num_bins, num_bins)
+    n_xy_B       = zeros(Float64, num_bins, num_bins)
+    gAA_r        = zeros(Float64, num_bins)
+    gBB_r        = zeros(Float64, num_bins)
+    gAB_r        = zeros(Float64, num_bins)
+    n_uncorr     = 0
+    n_gr_samples = 0
+
     # ── Initial drift forces and energies ────────────────────────────
     @threads for i in 1:num_walkers
         dx, dy, E_loc_old[i], _, _, _, _ = energy_estimators(
             xA_walkers[i], yA_walkers[i], xB_walkers[i], yB_walkers[i],
-            x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, L, h, l, R_match, Constants, R0, itp_up, itp_upp)
+            x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, L, h, lA, lB, R_match, Constants, R0, itp_up, itp_upp)
         drift_xA_old[i] = dx[1:N_half]
         drift_yA_old[i] = dy[1:N_half]
         drift_xB_old[i] = dx[N_half+1:end]
@@ -126,7 +147,7 @@ function dmc(xA_init::Vector{Float64}, yA_init::Vector{Float64},
                 y1B = wrap_position.(yB_walkers[i] .+ drift_yB_old[i] .* (Δτ/2), L)
 
                 F1x, F1y, _, _, _, _, _ = energy_estimators(
-                    x1A, y1A, x1B, y1B, x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, L, h, l, R_match, Constants, R0, itp_up, itp_upp)
+                    x1A, y1A, x1B, y1B, x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, L, h, lA, lB, R_match, Constants, R0, itp_up, itp_upp)
                 F1xA = F1x[1:N_half]; F1yA = F1y[1:N_half]
                 F1xB = F1x[N_half+1:end]; F1yB = F1y[N_half+1:end]
 
@@ -141,7 +162,7 @@ function dmc(xA_init::Vector{Float64}, yA_init::Vector{Float64},
 
                 # Second half-drift
                 Fmx, Fmy, _, _, _, _, _ = energy_estimators(
-                    xdA, ydA, xdB, ydB, x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, L, h, l, R_match, Constants, R0, itp_up, itp_upp)
+                    xdA, ydA, xdB, ydB, x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, L, h, lA, lB, R_match, Constants, R0, itp_up, itp_upp)
                 FmxA = Fmx[1:N_half]; FmyA = Fmy[1:N_half]
                 FmxB = Fmx[N_half+1:end]; FmyB = Fmy[N_half+1:end]
 
@@ -151,7 +172,7 @@ function dmc(xA_init::Vector{Float64}, yA_init::Vector{Float64},
                 y2B = wrap_position.(ydB .+ FmyB .* (Δτ/2), L)
 
                 F2x, F2y, _, _, _, _, _ = energy_estimators(
-                    x2A, y2A, x2B, y2B, x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, L, h, l, R_match, Constants, R0, itp_up, itp_upp)
+                    x2A, y2A, x2B, y2B, x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, L, h, lA, lB, R_match, Constants, R0, itp_up, itp_upp)
 
                 F2xA = F2x[1:N_half]; F2yA = F2y[1:N_half]
                 F2xB = F2x[N_half+1:end]; F2yB = F2y[N_half+1:end]
@@ -163,16 +184,7 @@ function dmc(xA_init::Vector{Float64}, yA_init::Vector{Float64},
 
                 dx, dy, E_loc_new[i], _, _, _, _ = energy_estimators(
                     new_xA[i], new_yA[i], new_xB[i], new_yB[i],
-                    x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, L, h, l, R_match, Constants, R0, itp_up, itp_upp)
-                 
-                # Accumulate n_xy_A and n_xy_B
-                accumulate_density!(n_xy_A, x_A, y_A, L)
-                accumulate_density!(n_xy_B, x_B, y_B, L)
-
-                # Accumulate gr
-                accumulate_gr!(gAA_r, x_A, y_A, L)
-                accumulate_gr!(gBB_r, x_B, y_B, L)
-                accumulate_g_AB_r!(gAB_r, x_A, y_A, x_B, y_B, L)
+                    x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, L, h, lA, lB, R_match, Constants, R0, itp_up, itp_upp)
 
                 drift_xA_new[i] = dx[1:N_half]
                 drift_yA_new[i] = dy[1:N_half]
@@ -193,18 +205,9 @@ function dmc(xA_init::Vector{Float64}, yA_init::Vector{Float64},
                 new_xB[i] = wrap_position.(xdB .+ drift_xB_old[i] .* Δτ, L)
                 new_yB[i] = wrap_position.(ydB .+ drift_yB_old[i] .* Δτ, L)
 
-                dx, dy, E_loc_new[i], _, _, _, _ = energy_estimators(
-                    new_xA[i], new_yA[i], new_xB[i], new_yB[i],
-                    x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, L, h, l, R_match, Constants, R0, itp_up, itp_upp)
-                
-                # Accumulate n_xy_A and n_xy_B
-                accumulate_density!(n_xy_A, x_A, y_A, L)
-                accumulate_density!(n_xy_B, x_B, y_B, L)
-
-                # Accumulate gr
-                accumulate_gr!(gAA_r, x_A, y_A, L)
-                accumulate_gr!(gBB_r, x_B, y_B, L)
-                accumulate_g_AB_r!(gAB_r, x_A, y_A, x_B, y_B, L)
+                dx, dy, E_loc_new[i], _, _, _, _ = energy_estimators(new_xA[i], new_yA[i], new_xB[i], new_yB[i],
+                                                                     x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, L,
+                                                                     h, lA, lB, R_match, Constants, R0, itp_up, itp_upp)
 
                 drift_xA_new[i] = dx[1:N_half]
                 drift_yA_new[i] = dy[1:N_half]
@@ -276,6 +279,19 @@ function dmc(xA_init::Vector{Float64}, yA_init::Vector{Float64},
         avg_E_post = isempty(E_loc_old_b) ? E_ref_initial : mean(E_loc_old_b)
         E_ref      = population_control(length(xA_walkers), num_target, avg_E_post, Δτ)
 
+        # ── Accumulate density / g(r) over the POST-BRANCHING population ──
+        if step > num_equil
+            for i in eachindex(xA_walkers)
+                accumulate_density!(n_xy_A, xA_walkers[i], yA_walkers[i], L)
+                accumulate_density!(n_xy_B, xB_walkers[i], yB_walkers[i], L)
+                accumulate_gr!(gAA_r, xA_walkers[i], yA_walkers[i], L)
+                accumulate_gr!(gBB_r, xB_walkers[i], yB_walkers[i], L)
+                accumulate_g_AB_r!(gAB_r, xA_walkers[i], yA_walkers[i], xB_walkers[i], yB_walkers[i], L)
+            end
+            n_uncorr     += length(xA_walkers)
+            n_gr_samples += length(xA_walkers)
+        end
+
         # ── Accumulate after equilibration ───────────────────────────
         step > num_equil && push!(E_history, avg_E_post)
         push!(E_plot, avg_E)
@@ -301,5 +317,20 @@ function dmc(xA_init::Vector{Float64}, yA_init::Vector{Float64},
 
     E_dmc     = mean(E_history)
     E_dmc_err = std(E_history) / sqrt(length(E_history))
-    return E_dmc, E_dmc_err, E_history
+
+    @assert n_uncorr > 0 "No density samples accumulated (num_equil >= num_steps?) — n_xy_A/n_xy_B would be normalized by zero."
+
+    g_total_r = gAA_r .+ gBB_r .+ 2 .* gAB_r
+
+    xy_bins = normalize_density!(n_xy_A, n_uncorr, L)
+    normalize_density!(n_xy_B, n_uncorr, L)
+
+    r_vals = normalize_gr!(gAA_r, N_half, L, n_gr_samples)
+    normalize_gr!(gBB_r, N_half, L, n_gr_samples)
+    normalize_gr!(gAB_r, N_half, L, n_gr_samples)
+    normalize_gr!(g_total_r, num_part, L, n_gr_samples)
+
+    return E_dmc, E_dmc_err, E_history,
+           n_xy_A, n_xy_B, xy_bins,
+           gAA_r, gBB_r, gAB_r, g_total_r, r_vals
 end

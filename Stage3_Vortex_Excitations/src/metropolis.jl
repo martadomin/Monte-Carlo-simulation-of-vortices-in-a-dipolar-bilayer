@@ -47,7 +47,7 @@ function compute_logΨ(x_A::Vector{Float64}, y_A::Vector{Float64},
                       L::Float64, Constants::Tuple{Float64, Float64, Float64},
                       x_vortex_A::Float64, y_vortex_A::Float64,
                       x_vortex_B::Float64, y_vortex_B::Float64,
-                      l::Float64)::Float64
+                      lA::Float64, lB::Float64)::Float64
     logΨ   = 0.0
     N_half = length(x_A)
 
@@ -85,12 +85,12 @@ function compute_logΨ(x_A::Vector{Float64}, y_A::Vector{Float64},
     @inbounds for i in 1:N_half
         rA = sqrt(get_periodic_difference(x_A[i], x_vortex_A, L)^2 +
                   get_periodic_difference(y_A[i], y_vortex_A, L)^2)
-        logΨ += u_vortex(rA, l, L)
+        logΨ += u_vortex(rA, lA, L)
     end
     @inbounds for α in 1:N_half
         rB = sqrt(get_periodic_difference(x_B[α], x_vortex_B, L)^2 +
                   get_periodic_difference(y_B[α], y_vortex_B, L)^2)
-        logΨ += u_vortex(rB, l, L)
+        logΨ += u_vortex(rB, lB, L)
     end
 
     return logΨ
@@ -111,7 +111,7 @@ function compute_ΔlogΨ(x_A_old::Vector{Float64}, y_A_old::Vector{Float64},
                         R0::Float64, itp_u,
                         x_vortex_A::Float64, y_vortex_A::Float64,
                         x_vortex_B::Float64, y_vortex_B::Float64,
-                        l::Float64)::Float64
+                        lA::Float64, lB::Float64)::Float64
 
     ΔlogΨ  = 0.0
     N_half = length(x_A_old)
@@ -138,7 +138,7 @@ function compute_ΔlogΨ(x_A_old::Vector{Float64}, y_A_old::Vector{Float64},
                       get_periodic_difference(y_A_old[id], y_vortex_A, L)^2)
         rA_new = sqrt(get_periodic_difference(x_A_new[id], x_vortex_A, L)^2 +
                       get_periodic_difference(y_A_new[id], y_vortex_A, L)^2)
-        ΔlogΨ += u_vortex(rA_new, l, L) - u_vortex(rA_old, l, L)
+        ΔlogΨ += u_vortex(rA_new, lA, L) - u_vortex(rA_old, lA, L)
 
     else  # layer == :B
         @inbounds for j in 1:N_half
@@ -162,7 +162,7 @@ function compute_ΔlogΨ(x_A_old::Vector{Float64}, y_A_old::Vector{Float64},
                       get_periodic_difference(y_B_old[id], y_vortex_B, L)^2)
         rB_new = sqrt(get_periodic_difference(x_B_new[id], x_vortex_B, L)^2 +
                       get_periodic_difference(y_B_new[id], y_vortex_B, L)^2)
-        ΔlogΨ += u_vortex(rB_new, l, L) - u_vortex(rB_old, l, L)
+        ΔlogΨ += u_vortex(rB_new, lB, L) - u_vortex(rB_old, lB, L)
     end
 
     return ΔlogΨ
@@ -183,7 +183,7 @@ function tune_delta(
     Constants::Tuple{Float64, Float64, Float64},
     x_vortex_A::Float64, y_vortex_A::Float64,
     x_vortex_B::Float64, y_vortex_B::Float64,
-    l::Float64,
+    lA::Float64, lB::Float64,
     R0::Float64,
     itp_u;
     target_ratio::Float64 = 0.5,
@@ -201,7 +201,7 @@ function tune_delta(
             ΔlogΨ = compute_ΔlogΨ(x_A, y_A, x_B, y_B,
                                 x_A_new, y_A_new, x_B_new, y_B_new,
                                 moved_id, layer, R_match, L, Constants, R0, itp_u,
-                                x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, l)
+                                x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, lA, lB)
             if log(rand()) < 2 * ΔlogΨ
                 x_A = x_A_new
                 y_A = y_A_new
@@ -259,7 +259,8 @@ function metropolis(
     Constants::Tuple{Float64, Float64, Float64};
     x_vortex_A::Float64, y_vortex_A::Float64,
     x_vortex_B::Float64, y_vortex_B::Float64,
-    l::Float64,
+    lA::Float64,
+    lB::Float64,
     x_A_init::Union{Vector{Float64}, Nothing} = nothing,
     y_A_init::Union{Vector{Float64}, Nothing} = nothing,
     x_B_init::Union{Vector{Float64}, Nothing} = nothing,
@@ -321,7 +322,7 @@ function metropolis(
     # ── Initial energy ───────────────────────────────────────────────
     _, _, E_local, E_local_drift, E_local_laplacian, E_kinetic, E_potential = energy_estimators(x_A, y_A, x_B, y_B,
                                                                                                 x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B,
-                                                                                                L, h, l, R_match, Constants, R0, itp_up, itp_upp)
+                                                                                                L, h, lA, lB, R_match, Constants, R0, itp_up, itp_upp)
     @assert !isnan(E_local) "Initial configuration produced NaN energy. Re-initialize."
 
     if progress
@@ -329,7 +330,7 @@ function metropolis(
     end
 
     logΨ_current = move_all ? compute_logΨ(x_A, y_A, x_B, y_B, R_match, R0, itp_u, L, Constants,
-                                            x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, l) : 0.0
+                                            x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, lA, lB) : 0.0
 
     # ── Main MC loop ─────────────────────────────────────────────────
     for i in 1:num_steps
@@ -340,7 +341,7 @@ function metropolis(
                 move_all_part(x_A, y_A, x_B, y_B, delta, L)
             logΨ_new = compute_logΨ(x_A_new, y_A_new, x_B_new, y_B_new,
                                     R_match, R0, itp_u, L, Constants,
-                                    x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, l)
+                                    x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, lA, lB)
             ΔlogΨ = 2 * (logΨ_new - logΨ_current)
         else
         moved_id, layer, x_A_new, y_A_new, x_B_new, y_B_new = move_one_part(x_A, y_A, x_B, y_B, delta, L)
@@ -348,7 +349,7 @@ function metropolis(
                                 x_A_new, y_A_new, x_B_new, y_B_new,
                                 moved_id, layer,
                                 R_match, L, Constants, R0, itp_u,
-                                x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, l)
+                                x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, lA, lB)
         end
 
         if log(rand()) < ΔlogΨ
@@ -360,7 +361,7 @@ function metropolis(
             move_all && (logΨ_current = logΨ_new)
 
             _, _, E_local, E_local_drift, E_local_laplacian, E_kinetic, E_potential =
-                energy_estimators(x_A, y_A, x_B, y_B, x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, L, h, l, R_match, Constants, R0, itp_up, itp_upp)
+                energy_estimators(x_A, y_A, x_B, y_B, x_vortex_A, y_vortex_A, x_vortex_B, y_vortex_B, L, h, lA, lB, R_match, Constants, R0, itp_up, itp_upp)
         end
 
         if i % step_block == 0
