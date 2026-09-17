@@ -1,3 +1,5 @@
+# common/src/jastrow_common.jl
+
 using Bessels
 
 """
@@ -31,17 +33,22 @@ function calculate_constants(L::Float64, R_match::Float64)
 end
 
 """
-    u2(r::Float64) -> Float64
-Defines the logarithm of the two-body wave function
+    u_AA(r, R_match, L, Constants) -> Float64
+
+Logarithm of the intra-layer two-body Jastrow factor, u_AA(r) = log(f_AA(r)).
+Used in the Metropolis acceptance ratio and log-wavefunction evaluation.
+Since f_BB = f_AA, this function is used for both AA and BB pairs. For a
+single-species system (Stage1), it's used for the only species there is.
+
+Piecewise definition:
+  - r < R_match : short-range, exact two-body scattering solution ~ K_0(2/√r)
+  - r ≥ R_match : long-range, phononic Reatto-Chester form
+  - r ≥ L/2    : cutoff, returns 0 (f_AA = 1)
 """
-function u2(r::Float64, R_match::Float64, L::Float64, Constants::Tuple{Float64, Float64, Float64})::Float64
-    # Ensure numerical stability for very small r
-    if r < 1e-10
-        return 0.0
-    end
-
-    if r>=L/2 return 0.0 end
-
+function u_AA(r::Float64, R_match::Float64, L::Float64, 
+              Constants::Tuple{Float64, Float64, Float64})::Float64
+    if r < 1e-10    return 0.0 end
+    if r >= L/2     return 0.0 end
     C1, C2, C3 = Constants
     if r < R_match
         return log(C1) + log(besselk(0, 2/sqrt(r)))
@@ -51,17 +58,15 @@ function u2(r::Float64, R_match::Float64, L::Float64, Constants::Tuple{Float64, 
 end
 
 """
-    u2_first_derivative(r::Float64, R_match::Float64, L::Float64, Constants::Tuple{Float64, Float64, Float64})::Float64
-Defines the first derivative of the logarithm of the two-body wave function
+    u_AA_prime(r, R_match, L, Constants) -> Float64
+
+First derivative of the intra-layer log-Jastrow factor. Used in the drift
+force and kinetic energy calculation.
 """
-function u2_first_derivative(r::Float64, R_match::Float64, L::Float64, Constants::Tuple{Float64, Float64, Float64})::Float64
-    # Ensure numerical stability for very small r
-    if r < 1e-10
-        return 0.0
-    end
-
-    if r>=L/2 return 0.0 end
-
+function u_AA_prime(r::Float64, R_match::Float64, L::Float64, 
+                    Constants::Tuple{Float64, Float64, Float64})::Float64
+    if r < 1e-10    return 0.0 end
+    if r >= L/2     return 0.0 end
     _, _, C3 = Constants
     if r < R_match
         return besselk(1, 2/sqrt(r)) / besselk(0, 2/sqrt(r)) * r^(-3/2)
@@ -71,17 +76,15 @@ function u2_first_derivative(r::Float64, R_match::Float64, L::Float64, Constants
 end
 
 """
-    u2_second_derivative(r::Float64, R_match::Float64, L::Float64, Constants::Tuple{Float64, Float64, Float64})::Float64
-Defines the second derivative of the logarithm of the two-body wave function
+    u_AA_second(r, R_match, L, Constants) -> Float64
+
+Second derivative of the intra-layer log-Jastrow factor. Used in the
+Laplacian term of the local kinetic energy.
 """
-function u2_second_derivative(r::Float64, R_match::Float64, L::Float64, Constants::Tuple{Float64, Float64, Float64})::Float64
-    # Ensure numerical stability for very small r
-    if r < 1e-10
-        return 0.0
-    end
-
-    if r>=L/2 return 0.0 end
-
+function u_AA_second(r::Float64, R_match::Float64, L::Float64, 
+                     Constants::Tuple{Float64, Float64, Float64})::Float64
+    if r < 1e-10    return 0.0 end
+    if r >= L/2     return 0.0 end
     _, _, C3 = Constants
     if r < R_match
         K0 = besselk(0, 2/sqrt(r))
@@ -89,7 +92,7 @@ function u2_second_derivative(r::Float64, R_match::Float64, L::Float64, Constant
         K2 = besselk(2, 2/sqrt(r))
         return (r)^(-3) * (((K0 * (K0 + K2))/2) - K1^2)/K0^2 - (3/2) * (K1/K0) * r^(-5/2)
     else
-        return - 2* C3/r^3 - 2 * C3/(L-r)^3
+        return -2*C3/r^3 - 2*C3/(L-r)^3
     end
 end
 

@@ -40,6 +40,9 @@ Generates a random initial configuration of `num_part` particles in a 2D periodi
 function random_initial_config(num_part::Int, L::Float64, distribution::AbstractString)::Tuple{Vector{Float64}, Vector{Float64}}
     if distribution == "Uniform"
         positions = L .* rand(2, num_part)  # [0, L)
+    elseif distribution == "Normal"
+        positions = L/2 .+ (L/4) .* randn(2, num_part)  # Centered at L/2 with std dev L/4
+        positions = wrap_position.(positions, L)  # Wrap into [0, L)    
     else
         error("Unsupported distribution: $distribution")
     end
