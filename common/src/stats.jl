@@ -1,3 +1,5 @@
+using LinearAlgebra
+
 """
 Detects the plateau in a blocking analysis.
 
@@ -43,4 +45,66 @@ function blocking_statistics(data::Vector{Float64}, block_size::Int)
     average = mean(block_means)
     error_average = std(block_means) / sqrt(num_blocks)
     return average, error_average
+end
+
+"""
+    weighted_extrapolation(x, y, y_err; powers=[1]) -> (intercept, intercept_err, coeffs, fitted_fn)
+
+Weighted least-squares fit of y = a + Σᵢ coeffs[i]·x^(powers[i]), weighted
+by 1/y_err², where `powers` fixes exactly which terms are present — the
+shape is chosen by the caller from known physics, not inferred from the
+data (see examples below).
+
+Returns:
+- intercept, intercept_err : the fitted value at x=0 and its uncertainty
+                              — the actual extrapolated physical answer
+- coeffs                    : the fitted [b, c, ...] coefficients for the
+                               non-intercept terms, in the same order as `powers`
+- fitted_fn                 : a function of x that evaluates the fitted
+                               curve — pass a fine x range to it to draw
+                               the fit on a plot
+
+Examples:
+- powers=[1]   → y = a + b·x            (linear DMC's O(Δτ) bias;
+                                           or a simple 1/num_walkers fit)
+- powers=[2]   → y = a + c·x²            (quadratic DMC's O(Δτ²) bias —
+                                           NO linear term)
+- powers=[1,2] → y = a + b·x + c·x²      (walker-count fit allowing
+                                           curvature as a correction)
+"""
+function weighted_extrapolation(x::Vector{Float64}, y::Vector{Float64},
+                                 y_err::Vector{Float64}; powers::Vector{Int}=[1])
+    w = 1.0 ./ y_err.^2
+    W = Diagonal(w)
+    X = hcat(ones(length(x)), (x.^p for p in powers)...)
+
+    β = (X' * W * X) \ (X' * W * y)
+    cov = inv(X' * W * X)
+
+    intercept, coeffs = β[1], β[2:end]
+    fitted_fn(xv) = intercept + sum(coeffs[i] * xv^powers[i] for i in eachindex(powers)) #defines a function
+
+    return intercept, sqrt(cov[1,1]), coeffs, fitted_fn
+end
+
+"""
+    choose_largest_consistent(x, y, y_err, intercept, intercept_err; n_sigma=1.0) -> x_chosen
+
+Among tested points (x, y, y_err), returns the largest x whose y is still
+consistent with `intercept` within n_sigma combined standard errors —
+i.e. |y - intercept| <= n_sigma * sqrt(y_err² + intercept_err²).
+Used to pick the cheapest (largest) Δτ still statistically indistinguishable
+from the Δτ→0 extrapolated value, rather than picking by eye alone.
+"""
+function choose_largest_consistent(x::Vector{Float64}, y::Vector{Float64}, y_err::Vector{Float64},
+                                    intercept::Float64, intercept_err::Float64; n_sigma::Float64=1.0)
+    order = sortperm(x; rev=true) #Gives indexes of x in descending order, so we check largest Δτ first (this is what rev =true does)
+    for i in order
+        combined_err = sqrt(y_err[i]^2 + intercept_err^2)
+        if abs(y[i] - intercept) <= n_sigma * combined_err
+            return x[i]
+        end
+    end
+    @warn "No Δτ found consistent with the extrapolated value within $(n_sigma)σ — falling back to the smallest tested Δτ"
+    return x[argmin(x)]
 end

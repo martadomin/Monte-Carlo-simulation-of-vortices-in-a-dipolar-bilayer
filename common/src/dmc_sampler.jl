@@ -152,5 +152,5 @@ function dmc(trial::TrialWavefunction, coords_init::NamedTuple,
     @assert n_obs_samples > 0 "No observable samples accumulated (num_equil >= num_steps?)."
 
     return (; E_dmc = mean(E_history), E_dmc_err = std(E_history)/sqrt(length(E_history)),
-              E_history, observables = obs)
+            E_history, E_plot, observables = obs)
 end

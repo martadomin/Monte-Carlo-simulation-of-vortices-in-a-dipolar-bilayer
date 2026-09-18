@@ -3,7 +3,8 @@
 # Include order follows the dependency chain — later files call functions
 # defined in earlier ones:
 #   utils               -> periodic geometry, RNG. No dependencies.
-#   stats               -> pure statistics (blocking_statistics, detect_plateau).
+#   stats               -> pure statistics (blocking_statistics, detect_plateau,
+#                          weighted_extrapolation, choose_largest_consistent).
 #                          No dependencies.
 #   jastrow_common      -> intra-layer/single-species Jastrow (u_AA family).
 #                          No dependencies (besides the Bessels package).
@@ -17,6 +18,10 @@
 #                          logpsi/Δlogpsi/energy_estimators/init_observables/
 #                          record_observables! method dispatches on.
 #   dmc_kernel          -> diffusion_step uses wrap_position (utils).
+#   data_management     -> result_path/save_run/load_run (persistence).
+#                          No dependencies on the files above.
+#   plotting_diagnostics -> plot_convergence, plot_dmc_trace (uses Plots).
+#                          No dependencies on the files above.
 #   metropolis          -> uses utils, configuration, and TrialWavefunction.
 #   dmc_sampler         -> uses dmc_kernel, configuration, and TrialWavefunction.
 
@@ -29,5 +34,8 @@ include(joinpath(@__DIR__, "observables.jl"))
 include(joinpath(@__DIR__, "configuration.jl"))
 include(joinpath(@__DIR__, "trial_wavefunction.jl"))
 include(joinpath(@__DIR__, "dmc_kernel.jl"))
+include(joinpath(@__DIR__, "data_management.jl"))
+include(joinpath(@__DIR__, "plotting_diagnostics.jl"))
+include(joinpath(@__DIR__, "observable_plots.jl"))
 include(joinpath(@__DIR__, "metropolis.jl"))
 include(joinpath(@__DIR__, "dmc_sampler.jl"))

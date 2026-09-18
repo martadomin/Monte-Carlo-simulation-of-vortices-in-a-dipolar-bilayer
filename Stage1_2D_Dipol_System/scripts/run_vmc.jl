@@ -1,119 +1,63 @@
-# scripts/run_vmc.jl
-# Expects from main.jl: num_part, nr0_sq, L, R_opt, num_steps_production
+# Stage1_2D_Dipol_System/scripts/run_vmc.jl
+#
+# Expects from main_VMC.jl: num_part, nr0_sq, L, R_opt, num_steps_production,
+# stage_dir (already defined by optimize_Rmatch.jl, run just before this)
 
-using Plots, LaTeXStrings
-
-nr0_sq_32 = num_part * nr0_sq^(3/2)
-
-# Read R_opt from sweep file
-rmatch_path = joinpath(@__DIR__, "..", "data", "sweep_results",
-              "Rmatch_sweep_N$(num_part)_nr0sq$(nr0_sq).txt")
-
-R_opt_ref = Ref(0.0)
-open(rmatch_path, "r") do io
-    section = ""
-    for line in eachline(io)
-        startswith(line, "#") && (section = line; continue)
-        isempty(strip(line)) && continue
-        line == "R_opt\tE_opt" && continue
-        if occursin("Optimal R_match", section)
-            vals = parse.(Float64, split(line, "\t"))
-            R_opt_ref[] = vals[1]
-        end
-    end
-end
-R_opt = R_opt_ref[]
-println("Loaded R_opt = $(R_opt) from sweep file")
-
-println("Number of particles: ", num_part)
-println("Density nr0^2 = ", nr0_sq)
-println("L = ", L)
 println("Optimal R_match = ", R_opt)
 println("Number of steps: ", num_steps_production)
 
-println("\n--- Tuning delta ---")
 Constants = calculate_constants(L, R_opt)
-x_coord, y_coord = random_initial_config(num_part, L, "Uniform")
-delta, x_init, y_init = tune_delta(x_coord, y_coord, L, R_opt, Constants)
+trial = SingleLayerTrial(; R_match=R_opt, Constants=Constants)
+
+println("\n--- Tuning delta ---")
+coords = init_random_config((A=num_part,), L)
+delta, coords = tune_delta(trial, coords, L; target_ratio=0.5, num_tune_steps=10^4, block_size=100)
 println("Tuned delta = ", delta)
 
 println("\n--- Running production VMC ($num_steps_production steps) ---")
-energies_vmc, energies_drift_vmc, energies_laplacian_vmc, E_tot, _, E_drift, E_laplacian, _, _, acceptance_ratio, r_vals, g_r_normalized, x_final, y_final = metropolis(num_part, 
-                                                                                                                            num_steps_production,
-                                                                                                                            delta, L, R_opt,
-                                                                                                                            Constants;
-                                                                                                                            x_init=x_init, y_init=y_init,
-                                                                                                                            final_energy_plot=false,
-                                                                                                                            plot_every=10^3,
-                                                                                                                            progress=true, num_bins=100)
-                                            
-# Block averaging to get final energy estimates
-block_sizes = [10, 20, 30, 40, 50, 100, 150, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000]
-sigmas = Float64[]
-sigmas_drift = Float64[]
-sigmas_laplacian = Float64[]
+result = metropolis(trial, (A=num_part,), num_steps_production, delta, L;
+                     coords_init=coords, final_energy_plot=false,
+                     plot_every=10^3, progress=true, num_bins=100)
 
+block_sizes = [10,20,30,40,50,100,150,200,300,400,500,600,700,800,900,
+               1000,1100,1200,1300,1400,1500,1600,1700,1800,1900,2000]
+sigmas, sigmas_drift, sigmas_laplacian = Float64[], Float64[], Float64[]
 for B in block_sizes
-    _, sigma = blocking_statistics(energies_vmc, B)
-    _, sigma_drift = blocking_statistics(energies_drift_vmc, B)
-    _, sigma_laplacian = blocking_statistics(energies_laplacian_vmc, B)
-    push!(sigmas, sigma)
-    push!(sigmas_drift, sigma_drift)
-    push!(sigmas_laplacian, sigma_laplacian)
+    _, s  = blocking_statistics(result.energies, B)
+    _, sd = blocking_statistics(result.energies_drift, B)
+    _, sl = blocking_statistics(result.energies_laplacian, B)
+    push!(sigmas, s); push!(sigmas_drift, sd); push!(sigmas_laplacian, sl)
 end
 
-println("\nR_opt = $(round(R_opt, digits=4))")
-
-# --- AUTOMATED PLATEAU DETECTION ---
 println("\n--- Automating Plateau Detection ---")
-
-plateau_std = detect_plateau(block_sizes, sigmas, window_size=4, rtol=0.05)
-println("Detected plateau block size for standard estimator: ", plateau_std)
-
-plateau_drift = detect_plateau(block_sizes, sigmas_drift, window_size=4, rtol=0.05)
-println("Detected plateau block size for drift estimator:    ", plateau_drift)
-
+plateau_std       = detect_plateau(block_sizes, sigmas, window_size=4, rtol=0.05)
+plateau_drift     = detect_plateau(block_sizes, sigmas_drift, window_size=4, rtol=0.05)
 plateau_laplacian = detect_plateau(block_sizes, sigmas_laplacian, window_size=4, rtol=0.05)
-println("Detected plateau block size for laplacian estimator:", plateau_laplacian)
-# -----------------------------------
+println("Detected plateau block size for standard estimator:  ", plateau_std)
+println("Detected plateau block size for drift estimator:     ", plateau_drift)
+println("Detected plateau block size for laplacian estimator: ", plateau_laplacian)
 
-# Get error at chosen block size
-avg_energy, sigma = blocking_statistics(energies_vmc, plateau_std)
-avg_energy_drift, sigma_drift = blocking_statistics(energies_drift_vmc, plateau_drift)
-avg_energy_laplacian, sigma_laplacian = blocking_statistics(energies_laplacian_vmc, plateau_laplacian)
+avg_energy, sigma                     = blocking_statistics(result.energies, plateau_std)
+avg_energy_drift, sigma_drift         = blocking_statistics(result.energies_drift, plateau_drift)
+avg_energy_laplacian, sigma_laplacian = blocking_statistics(result.energies_laplacian, plateau_laplacian)
 
+nr0_sq_32 = num_part * nr0_sq^(3/2)
 println("\n--- Results ---")
 println("E/N/(nr0^2)^(3/2) ± σ = ", avg_energy/nr0_sq_32, " ± ", sigma/nr0_sq_32)
-println("E_drift/N/(nr0^2)^(3/2) ± σ = ", avg_energy_drift/nr0_sq_32 , " ± ", sigma_drift/nr0_sq_32)
+println("E_drift/N/(nr0^2)^(3/2) ± σ = ", avg_energy_drift/nr0_sq_32, " ± ", sigma_drift/nr0_sq_32)
 println("E_laplacian/N/(nr0^2)^(3/2) ± σ = ", avg_energy_laplacian/nr0_sq_32, " ± ", sigma_laplacian/nr0_sq_32)
-println("Acceptance ratio = ", acceptance_ratio)
+println("Acceptance ratio = ", result.acceptance_ratio)
 
-# Save results
-results_path = joinpath(@__DIR__, "..", "data", "results", "VMC",
-               "vmc_N$(num_part)_nr0sq$(nr0_sq).txt")
-open(results_path, "w") do io
-    println(io, "num_part\tnr0_sq\tL\tR_opt\tE_tot\tError")
-    println(io, "$(num_part)\t$(nr0_sq)\t$(L)\t$(Float64(R_opt))\t$(avg_energy)\t$(sigma)")
-end
-println("Saved results to: ", results_path)
+path = result_path(stage_dir, "VMC", (N=num_part, nr0sq=nr0_sq))
+save_run(path, (; num_part, nr0_sq, L, R_opt=R_opt, num_steps_production),
+         (; result..., avg_energy, sigma, avg_energy_drift, sigma_drift,
+            avg_energy_laplacian, sigma_laplacian, plateau_std, plateau_drift, plateau_laplacian))
+println("Saved results to: ", path)
 
-# Save final configuration
-config_path = joinpath(@__DIR__, "..", "data", "results", "VMC",
-              "vmc_config_N$(num_part)_nr0sq$(nr0_sq).txt")
-open(config_path, "w") do io
-    println(io, "x\ty")
-    for (x, y) in zip(x_final, y_final)
-        println(io, "$(x)\t$(y)")
-    end
-end
-println("Saved final config to: ", config_path)
-
-# Save g(r)
-gr_path = joinpath(@__DIR__, "..", "data", "results", "VMC",
-          "gr_N$(num_part)_nr0sq$(nr0_sq).txt")
-open(gr_path, "w") do io
-    println(io, "r\tg(r)")
-    for (r, g) in zip(r_vals, g_r_normalized)
-        println(io, "$(r)\t$(g)")
-    end
+if plot_vmc_convergence_diagnostic
+    p_conv = plot_convergence(block_sizes, sigmas, sigmas_drift, sigmas_laplacian,
+                               plateau_std, plateau_drift, plateau_laplacian;
+                               title="VMC convergence, N=$(num_part), nr0²=$(nr0_sq)")
+    display(p_conv)
+    savefig(p_conv, joinpath(stage_dir, "data", "plots", "vmc_convergence_N$(num_part)_nr0sq$(nr0_sq).pdf"))
 end
