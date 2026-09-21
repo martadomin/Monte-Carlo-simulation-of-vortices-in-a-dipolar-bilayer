@@ -66,5 +66,6 @@ p = scatter(Δτ_vals, E_vals; yerror=E_err_vals, xlabel=L"\Delta\tau", ylabel=L
 plot!(dtau_range, fitted_fn.(dtau_range); label="fit ($(quadratic ? "quadratic" : "linear"))", linestyle=:dash)
 scatter!([0.0], [intercept]; yerror=[intercept_err], label="extrapolated (Δτ→0)", marker=:star5, markersize=10, color=:red)
 vline!([Δτ_chosen]; label="Δτ_chosen", linestyle=:dot, color=:black)
+mkpath(joinpath(stage_dir, "data", "plots"))
 display(p)
 savefig(p, joinpath(stage_dir, "data", "plots", "dtau_convergence_N$(num_part)_nr0sq$(nr0_sq)_h$(h)_d$(round(d,digits=4)).pdf"))

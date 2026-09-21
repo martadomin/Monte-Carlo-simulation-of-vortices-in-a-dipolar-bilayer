@@ -30,6 +30,7 @@ p = plot(nr0_range, E_paper_normalized,
 scatter!(nr0_sq_vals, E_vmc .+ E_tail, yerror=error_E_vmc,
          label=L"\mathrm{VMC,\ }N = %$(num_part)", marker=:circle, markersize=6, color=:red)
 
+mkpath(joinpath(stage_dir, "data", "plots"))
 savefig(joinpath(stage_dir, "data", "plots", "plot_vmc_N$(num_part).pdf"))
 println("Saved VMC plot")
 display(p)
@@ -41,6 +42,7 @@ if plot_convergence_analysis
         p_conv = plot_convergence(r.block_sizes, r.sigmas, r.sigmas_drift, r.sigmas_laplacian,
                                    r.plateau_std, r.plateau_drift, r.plateau_laplacian;
                                    title="Convergence, nr0²=$nr0_sq")
+        mkpath(joinpath(stage_dir, "data", "plots"))
         display(p_conv)
         savefig(p_conv, joinpath(stage_dir, "data", "plots", "convergence_N$(num_part)_nr0sq$(nr0_sq).pdf"))
     end

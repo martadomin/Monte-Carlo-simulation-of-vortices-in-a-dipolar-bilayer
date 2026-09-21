@@ -36,5 +36,6 @@ p = plot(p_coarse, p_fine; layout=(1,2), size=(1200,500),
          plot_title="R_match sweep, N=$(num_part), L=$(round(L,digits=3))")
 
 display(p)
+mkpath(joinpath(stage_dir, "data", "plots"))
 savefig(p, joinpath(stage_dir, "data", "plots", "Rmatch_sweep_both_N$(num_part)_L$(round(L,digits=3)).pdf"))
 println("Saved R_match sweep plot (coarse + fine)")

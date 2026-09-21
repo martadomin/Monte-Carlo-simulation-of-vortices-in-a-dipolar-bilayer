@@ -40,6 +40,7 @@ for factor in τ_factors
     if plot_dmc_trace_diagnostic
         p_trace = plot_dmc_trace(result, num_steps_dmc ÷ 5; title="Δτ=$(round(Δτ,digits=6)), N=$(num_part), nr0²=$(nr0_sq), h=$(h)")
         display(p_trace)
+        mkpath(joinpath(stage_dir, "data", "plots"))
         savefig(p_trace, joinpath(stage_dir, "data", "plots", "dmc_trace_N$(num_part)_nr0sq$(nr0_sq)_h$(h)_dtau$(round(Δτ,digits=6)).pdf"))
     end
 

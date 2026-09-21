@@ -19,6 +19,7 @@ p = plot(d_found, E_vals; yerror=err_vals, marker=:diamond, linewidth=1.5, color
          xlabel=L"d\ /\ (L/2)", ylabel=L"E_{vortex}/N\ (\varepsilon_0)",
          title=L"h = %$h,\ \ell_A=%$lA,\ \ell_B=%$lB", legend=:topright, framestyle=:box)
 
+mkpath(joinpath(stage_dir, "data", "plots"))
 display(p)
 savefig(p, joinpath(stage_dir, "data", "plots", "vortex_energy_vs_d_DMC_N$(num_part)_nr0sq$(nr0_sq)_h$(h).pdf"))
 println("Saved DMC vortex offset plot")

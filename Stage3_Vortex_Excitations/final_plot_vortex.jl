@@ -29,6 +29,7 @@ p = scatter(d_vmc, E_vmc; yerror=err_vmc, marker=:circle, label="VMC", color=:do
             title=L"h = %$h,\ \ell_A=%$lA,\ \ell_B=%$lB", legend=:topright, framestyle=:box)
 scatter!(d_dmc, E_dmc; yerror=err_dmc, marker=:diamond, label="DMC", color=:darkorange)
 
+mkpath(joinpath(stage_dir, "data", "plots"))
 display(p)
 savefig(p, joinpath(stage_dir, "data", "plots", "vortex_energy_vs_d_combined_N$(num_part)_nr0sq$(nr0_sq)_h$(h).pdf"))
 println("Saved combined vortex offset plot")

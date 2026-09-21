@@ -42,6 +42,8 @@ for num_walkers in num_walkers_vals
     if plot_dmc_trace_diagnostic
         p_trace = plot_dmc_trace(result, num_steps_dmc ÷ 5;
                                   title="num_walkers=$(num_walkers), N=$(num_part), nr0²=$(nr0_sq), h=$(h), d=$(round(d,digits=4))")
+        
+        mkpath(joinpath(stage_dir, "data", "plots"))
         display(p_trace)
         savefig(p_trace, joinpath(stage_dir, "data", "plots",
                 "dmc_trace_N$(num_part)_nr0sq$(nr0_sq)_h$(h)_d$(round(d,digits=4))_nw$(num_walkers).pdf"))
@@ -61,6 +63,7 @@ p = scatter(x, E_vals; yerror=E_err_vals, xlabel=L"1/N_{\mathrm{walkers}}", ylab
             label="DMC data", framestyle=:box)
 plot!(x_range, fitted_fn.(x_range); label="weighted fit", linestyle=:dash)
 scatter!([0.0], [intercept]; yerror=[intercept_err], label="extrapolated (1/N→0)", marker=:star5, markersize=10, color=:red)
+mkpath(joinpath(stage_dir, "data", "plots"))
 display(p)
 savefig(p, joinpath(stage_dir, "data", "plots", "num_walkers_convergence_N$(num_part)_nr0sq$(nr0_sq)_h$(h)_d$(round(d,digits=4)).pdf"))
 

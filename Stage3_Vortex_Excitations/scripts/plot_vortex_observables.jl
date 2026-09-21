@@ -35,6 +35,8 @@ p_gr = plot_gr(r_vals, obs_vmc.gAA_r; label="g_AA (VMC)")
 plot!(p_gr, r_vals, obs_dmc.gAA_r; label="g_AA (DMC mixed)")
 plot!(p_gr, r_vals, gAA_extrap; label="g_AA (extrapolated)", linestyle=:dash)
 
+mkpath(joinpath(stage_dir, "data", "plots"))
+
 display(p_nA); display(p_nB); display(p_gr)
 savefig(p_nA, joinpath(stage_dir, "data", "plots", "density_A_extrap_N$(num_part)_nr0sq$(nr0_sq)_h$(h)_d$(round(d,digits=4)).pdf"))
 savefig(p_nB, joinpath(stage_dir, "data", "plots", "density_B_extrap_N$(num_part)_nr0sq$(nr0_sq)_h$(h)_d$(round(d,digits=4)).pdf"))

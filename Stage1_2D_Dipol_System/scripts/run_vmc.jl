@@ -121,6 +121,7 @@ if plot_vmc_convergence_diagnostic
     p_conv = plot_convergence(block_sizes, sigmas, sigmas_drift, sigmas_laplacian,
                                plateau_std, plateau_drift, plateau_laplacian;
                                title="VMC convergence, N=$(num_part), nr0²=$(nr0_sq)")
+    mkpath(joinpath(stage_dir, "data", "plots"))
     display(p_conv)
     savefig(p_conv, joinpath(stage_dir, "data", "plots", "vmc_convergence_N$(num_part)_nr0sq$(nr0_sq).pdf"))
 end

@@ -130,6 +130,7 @@ function metropolis(trial::TrialWavefunction, counts::NamedTuple, num_steps::Int
     if final_energy_plot
         p1 = plot(step_plot, energy_plot; xlabel="Step", ylabel="E/N (drift estimator)",
                   title="Energy evolution", legend=false, lw=2)
+        mkpath(joinpath(stage_dir, "data", "plots"))
         display(p1)
         println("\n>>> Press ENTER to continue..."); readline()
     end

@@ -20,5 +20,6 @@ hline!(p, [0.0]; color=:black, linestyle=:dash, label="")
 isfinite(E_single) && hline!(p, [E_single]; color=:red, linestyle=:dash,
                               label=L"nr_0^2=%$(nr0sq/2)\ \mathrm{(single\ layer)}")
 
+mkpath(joinpath(stage_dir, "data", "plots"))
 savefig(p, joinpath(stage_dir, "data", "plots", "Inset_N$(N)_nr0sq$(nr0sq).pdf"))
 display(p)

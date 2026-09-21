@@ -28,6 +28,7 @@ p = plot(nr0_range, E_paper_normalized,
 scatter!(nr0_sq_vals, E_dmc .+ E_tail, yerror=error_E_dmc,
          label=L"\mathrm{DMC\ results,\ }N = %$(num_part)", marker=:square, markersize=6, color=:green)
 
+mkpath(joinpath(stage_dir, "data", "plots"))
 savefig(joinpath(stage_dir, "data", "plots", "plot_dmc_N$(num_part).pdf"))
 println("Saved DMC plot")
 display(p)

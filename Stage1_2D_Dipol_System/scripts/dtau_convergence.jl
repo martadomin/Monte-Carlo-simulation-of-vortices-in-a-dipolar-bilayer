@@ -32,6 +32,7 @@ for factor in τ_factors
     if plot_dmc_trace_diagnostic
         p_trace = plot_dmc_trace(result, num_equil_i; title="Δτ=$(round(Δτ,digits=6)), N=$(num_part), nr0²=$(nr0_sq)")
         display(p_trace)
+        mkpath(joinpath(stage_dir, "data", "plots"))
         savefig(p_trace, joinpath(stage_dir, "data", "plots", "dmc_trace_N$(num_part)_nr0sq$(nr0_sq)_dtau$(round(Δτ,digits=6)).pdf"))
     end
 
@@ -54,4 +55,5 @@ plot!(dtau_range, fitted_fn.(dtau_range); label="fit ($(quadratic ? "quadratic" 
 scatter!([0.0], [intercept]; yerror=[intercept_err], label="extrapolated (Δτ→0)", marker=:star5, markersize=10, color=:red)
 vline!([Δτ_chosen]; label="Δτ_chosen", linestyle=:dot, color=:black)
 display(p)
+mkpath(joinpath(stage_dir, "data", "plots"))
 savefig(p, joinpath(stage_dir, "data", "plots", "dtau_convergence_N$(num_part)_nr0sq$(nr0_sq).pdf"))

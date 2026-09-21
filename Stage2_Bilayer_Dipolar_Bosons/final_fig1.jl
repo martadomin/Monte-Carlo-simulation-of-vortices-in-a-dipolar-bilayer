@@ -27,5 +27,6 @@ isfinite(E_single) && hline!(p, [E_single]; color=:black, linestyle=:dash,
                               label=L"nr_0^2=%$(nr0_sq/2)\ \mathrm{(single\ layer)}")
 
 savefig(p, joinpath(stage_dir, "data", "plots", "Fig1_combined_N$(num_part)_nr0sq$(nr0_sq).pdf"))
+mkpath(joinpath(stage_dir, "data", "plots"))
 display(p)
 println("Saved combined Fig1 plot")
