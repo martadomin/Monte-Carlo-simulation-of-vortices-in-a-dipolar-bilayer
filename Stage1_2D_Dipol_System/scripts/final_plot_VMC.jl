@@ -10,10 +10,10 @@ plot_convergence_analysis = false   # set true to also show the blocking-σ(B) c
 
 E_vmc, error_E_vmc = Float64[], Float64[]
 for nr0_sq in nr0_sq_vals
-    path = result_path(stage_dir, "VMC", (N=num_part, nr0sq=nr0_sq))
-    run = load_run(path; run=1)
-    push!(E_vmc, run.result.avg_energy / (num_part * nr0_sq^(3/2)))
-    push!(error_E_vmc, run.result.sigma / (num_part * nr0_sq^(3/2)))
+    p_result = result_path(stage_dir, "VMC", (N=num_part, nr0sq=nr0_sq))
+    loaded_run = load_run(p_result; run=1)
+    push!(E_vmc, loaded_run.result.avg_energy / (num_part * nr0_sq^(3/2)))
+    push!(error_E_vmc, loaded_run.result.sigma / (num_part * nr0_sq^(3/2)))
 end
 
 a1, a2, a3 = 4.536, 4.38, 1.2

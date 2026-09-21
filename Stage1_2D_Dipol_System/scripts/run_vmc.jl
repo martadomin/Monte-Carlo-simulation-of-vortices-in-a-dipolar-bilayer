@@ -19,8 +19,8 @@ result = metropolis(trial, (A=num_part,), num_steps_production, delta, L;
                      coords_init=coords, final_energy_plot=false,
                      plot_every=10^3, progress=true, num_bins=100)
 
-block_sizes = [10,20,30,40,50,100,150,200,300,400,500,600,700,800,900,
-               1000,1100,1200,1300,1400,1500,1600,1700,1800,1900,2000]
+block_sizes = filter(b -> num_steps_production ÷ b >= 2, [10,20,30,40,50,100,150,200,300,400,500,600,700,800,900,
+                                                  1000,1100,1200,1500,1600,1700,1800,1900,2000])
 sigmas, sigmas_drift, sigmas_laplacian = Float64[], Float64[], Float64[]
 for B in block_sizes
     _, s  = blocking_statistics(result.energies, B)
@@ -51,8 +51,71 @@ println("Acceptance ratio = ", result.acceptance_ratio)
 path = result_path(stage_dir, "VMC", (N=num_part, nr0sq=nr0_sq))
 save_run(path, (; num_part, nr0_sq, L, R_opt=R_opt, num_steps_production),
          (; result..., avg_energy, sigma, avg_energy_drift, sigma_drift,
-            avg_energy_laplacian, sigma_laplacian, plateau_std, plateau_drift, plateau_laplacian))
+            avg_energy_laplacian, sigma_laplacian, plateau_std, plateau_drift, plateau_laplacian), overwrite=true)
 println("Saved results to: ", path)
+
+path = result_path(stage_dir, "VMC", (N=num_part, nr0sq=nr0_sq))
+
+if skip_if_exists && isfile(path)
+    println("Existing VMC result found for N=$num_part, nr0²=$nr0_sq — loading, skipping computation.")
+    loaded = load_run(path)   # all runs
+    avg_energy, sigma = combine_runs([r.result.avg_energy for r in loaded], [r.result.sigma for r in loaded])
+    println("Combined E/N = ", avg_energy/num_part, " ± ", sigma/num_part, " (from $(length(loaded)) run(s))")
+else
+    println("Optimal R_match = ", R_opt)
+    println("Number of steps: ", num_steps_production)
+
+    Constants = calculate_constants(L, R_opt)
+    trial = SingleLayerTrial(; R_match=R_opt, Constants=Constants)
+
+    println("\n--- Tuning delta ---")
+    coords = init_random_config((A=num_part,), L)
+    delta, coords = tune_delta(trial, coords, L; target_ratio=0.5, num_tune_steps=10^4, block_size=100)
+    println("Tuned delta = ", delta)
+
+    println("\n--- Running production VMC ($num_steps_production steps) ---")
+    result = metropolis(trial, (A=num_part,), num_steps_production, delta, L;
+                         coords_init=coords, final_energy_plot=false,
+                         plot_every=10^3, progress=true, num_bins=100)
+
+    block_sizes = filter(b -> num_steps_production ÷ b >= 2,
+                          [10,20,30,40,50,100,150,200,300,400,500,600,700,800,900,
+                           1000,1100,1200,1300,1400,1500,1600,1700,1800,1900,2000])
+    sigmas, sigmas_drift, sigmas_laplacian = Float64[], Float64[], Float64[]
+    for B in block_sizes
+        _, s  = blocking_statistics(result.energies, B)
+        _, sd = blocking_statistics(result.energies_drift, B)
+        _, sl = blocking_statistics(result.energies_laplacian, B)
+        push!(sigmas, s); push!(sigmas_drift, sd); push!(sigmas_laplacian, sl)
+    end
+
+    plateau_std       = detect_plateau(block_sizes, sigmas, window_size=4, rtol=0.05)
+    plateau_drift     = detect_plateau(block_sizes, sigmas_drift, window_size=4, rtol=0.05)
+    plateau_laplacian = detect_plateau(block_sizes, sigmas_laplacian, window_size=4, rtol=0.05)
+
+    avg_energy, sigma                     = blocking_statistics(result.energies, plateau_std)
+    avg_energy_drift, sigma_drift         = blocking_statistics(result.energies_drift, plateau_drift)
+    avg_energy_laplacian, sigma_laplacian = blocking_statistics(result.energies_laplacian, plateau_laplacian)
+
+    println("\n--- Results ---")
+    println("E/N = ", avg_energy/num_part, " ± ", sigma/num_part)
+    println("Acceptance ratio = ", result.acceptance_ratio)
+
+    if plot_vmc_convergence_diagnostic
+        p_conv = plot_convergence(block_sizes, sigmas, sigmas_drift, sigmas_laplacian,
+                                   plateau_std, plateau_drift, plateau_laplacian;
+                                   title="VMC convergence, N=$(num_part), nr0²=$(nr0_sq)")
+        display(p_conv)
+        savefig(p_conv, joinpath(stage_dir, "data", "plots", "vmc_convergence_N$(num_part)_nr0sq$(nr0_sq).pdf"))
+    end
+
+    save_run(path, (; num_part, nr0_sq, L, R_opt=R_opt, num_steps_production),
+             (; result..., avg_energy, sigma, avg_energy_drift, sigma_drift,
+                avg_energy_laplacian, sigma_laplacian, plateau_std, plateau_drift, plateau_laplacian,
+                block_sizes, sigmas, sigmas_drift, sigmas_laplacian);
+             overwrite=force_rerun_overwrite)
+    println("Saved to: ", path)
+end
 
 if plot_vmc_convergence_diagnostic
     p_conv = plot_convergence(block_sizes, sigmas, sigmas_drift, sigmas_laplacian,

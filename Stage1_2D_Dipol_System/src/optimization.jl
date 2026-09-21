@@ -19,8 +19,9 @@ function sweep_Rmatch(L::Float64, num_part::Int, R_match_vals::Vector{Float64}, 
                              coords_init=coords, final_energy_plot=false,
                              plot_every=10^2, progress=true, num_bins=100)
 
-        block_sizes = [10,20,30,40,50,100,150,200,300,400,500,600,700,800,900,
-                       1000,1100,1200,1500,1600,1700,1800,1900,2000]
+        # instead of a fixed list, filter to what's actually valid for num_steps:
+        block_sizes = filter(b -> num_steps ÷ b >= 2, [10,20,30,40,50,100,150,200,300,400,500,600,700,800,900,
+                                                        1000,1100,1200,1500,1600,1700,1800,1900,2000])
         sigmas, sigmas_drift, sigmas_laplacian = Float64[], Float64[], Float64[]
         for B in block_sizes
             _, s   = blocking_statistics(result.energies, B)
@@ -46,7 +47,7 @@ function sweep_Rmatch(L::Float64, num_part::Int, R_match_vals::Vector{Float64}, 
         # thread), so this is safe to call from inside @threads with no
         # race condition — no two threads ever write the same file.
         path = result_path(stage_dir, "sweep_Rmatch", (N=num_part, R_match=R_match))
-        save_run(path, (; L, num_part, R_match, num_steps), result)
+        save_run(path, (; L, num_part, R_match, num_steps), result, overwrite=true)
     end
 
     return (R_match_vals=R_match_vals, energies=energies, energies_drift=energies_drift,
@@ -87,8 +88,8 @@ function optimize_Rmatch(L::Float64, num_part::Int, num_steps_coarse::Int,
 
     path = result_path(stage_dir, "Rmatch_optimum", (N=num_part, L=L))
     save_run(path, (; L, num_part, num_steps_coarse, num_steps_fine),
-            (; results_coarse, results_fine, R_opt_rough, R_opt, E_opt_total))
-
+        (; results_coarse, results_fine, R_opt_rough, R_opt, E_opt_total),
+        overwrite=true)
     return R_opt
 end
 

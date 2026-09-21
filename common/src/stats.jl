@@ -108,3 +108,19 @@ function choose_largest_consistent(x::Vector{Float64}, y::Vector{Float64}, y_err
     @warn "No Δτ found consistent with the extrapolated value within $(n_sigma)σ — falling back to the smallest tested Δτ"
     return x[argmin(x)]
 end
+
+"""
+    combine_runs(values, errors) -> (mean, error)
+
+Weighted mean of several independent measurements of the same quantity,
+each with its own statistical error — the correct way to combine repeated
+runs (e.g. several save_run entries under one path), not just picking one.
+Weight ∝ 1/σ², same inverse-variance weighting as weighted_extrapolation.
+"""
+function combine_runs(values::Vector{Float64}, errors::Vector{Float64})
+    length(values) == 1 && return values[1], errors[1]
+    w = 1.0 ./ errors.^2
+    mean_val = sum(w .* values) / sum(w)
+    combined_err = sqrt(1.0 / sum(w))
+    return mean_val, combined_err
+end
