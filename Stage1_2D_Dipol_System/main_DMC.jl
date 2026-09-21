@@ -11,7 +11,10 @@ include(joinpath(@__DIR__, "config.jl"))
 # results, rather than recomputing.
 
 quadratic = false
-num_steps_dmc = 10^5
+τ_total = 10.0   # fixed total imaginary time — dtau_convergence.jl and
+                 # num_walkers_convergence.jl both derive their step counts
+                 # from τ_total/Δτ, so every DMC run in this pipeline covers
+                 # the same physical duration
 
 num_walkers_dtau_study = 200
 num_walkers_vals = [20, 30, 40, 50, 75, 150, 200, 300, 400]
@@ -25,8 +28,6 @@ for nr0_sq_val in nr0_sq_vals
     global L = sqrt(num_part / nr0_sq_val)
     println("\n=== nr0^2 = $nr0_sq, L = $L ===")
 
-    # Load R_opt from Stage1's own saved VMC optimization — must already
-    # exist, from running main_VMC.jl for this num_part/L first.
     rmatch_path = result_path(stage_dir, "Rmatch_optimum", (N=num_part, L=L))
     if !isfile(rmatch_path)
         error("No saved R_match for N=$num_part, L=$L. Run main_VMC.jl first.")
