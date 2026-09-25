@@ -23,7 +23,7 @@ end
 First derivative of the inter-layer log-Jastrow factor.
 """
 function u_AB_prime(r::Float64, R0::Float64, itp_up)::Float64
-    r >= R0 && return 0.0
+   r >= R0 && return 0.0
     return itp_up(r)
 end
 

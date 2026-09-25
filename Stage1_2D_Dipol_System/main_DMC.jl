@@ -11,12 +11,12 @@ include(joinpath(@__DIR__, "config.jl"))
 # results, rather than recomputing.
 
 quadratic = false
-τ_total = 10.0   # fixed total imaginary time — dtau_convergence.jl and
+τ_total = 7.5   # fixed total imaginary time — dtau_convergence.jl and
                  # num_walkers_convergence.jl both derive their step counts
                  # from τ_total/Δτ, so every DMC run in this pipeline covers
                  # the same physical duration
 
-num_walkers_dtau_study = 200
+num_walkers_dtau_study = 100
 num_walkers_vals = [20, 30, 40, 50, 75, 150, 200, 300, 400]
 
 stage_dir = joinpath(@__DIR__)
